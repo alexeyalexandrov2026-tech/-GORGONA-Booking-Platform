@@ -5,10 +5,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from gorgona_booking.api import health, holds
+from gorgona_booking.api import health, holds, platform, salons
 from gorgona_booking.api.errors import install_error_handlers
 from gorgona_booking.api.health import ReadinessProbe
 from gorgona_booking.api.request_id import RequestIdMiddleware
+from gorgona_booking.auth.verifier import OidcJwtVerifier, RemoteJwksKeySource, TokenVerifier
 from gorgona_booking.booking.service import BookingService
 from gorgona_booking.config import Settings, assert_environment_allowed
 from gorgona_booking.db.pool import (
@@ -24,6 +25,7 @@ def create_app(
     *,
     pool: RuntimePool | None = None,
     readiness_probe: ReadinessProbe | None = None,
+    token_verifier: TokenVerifier | None = None,
 ) -> FastAPI:
     """Build the app. An injected `pool` is borrowed; otherwise one is opened from
     `settings.database_url` for the app's lifetime and closed on shutdown."""
@@ -67,6 +69,7 @@ def create_app(
         if pool is not None
         else None
     )
+    app.state.token_verifier = token_verifier or _configured_verifier(settings)
     app.state.readiness_probe = readiness_probe or (
         pool_readiness_probe(pool) if pool is not None else None
     )
@@ -75,4 +78,26 @@ def create_app(
     install_error_handlers(app)
     app.include_router(health.router)
     app.include_router(holds.router)
+    app.include_router(salons.router)
+    app.include_router(platform.router)
     return app
+
+
+def _configured_verifier(settings: Settings) -> TokenVerifier | None:
+    """The external IdP from GBA_AUTH_* settings, or None (protected routes answer 503)."""
+    if not settings.auth_configured:
+        return None
+    issuer, audience, jwks_url = (
+        settings.auth_issuer,
+        settings.auth_audience,
+        settings.auth_jwks_url,
+    )
+    if issuer is None or audience is None or jwks_url is None:  # enforced by Settings
+        return None
+    return OidcJwtVerifier(
+        issuer=issuer,
+        audience=audience,
+        key_source=RemoteJwksKeySource(jwks_url),
+        algorithms=settings.auth_algorithms,
+        leeway_seconds=settings.auth_leeway_seconds,
+    )

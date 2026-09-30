@@ -13,7 +13,8 @@ from psycopg import errors
 
 from gorgona_booking.db.pool import RuntimeConnection, RuntimePool, assert_safe_runtime_role
 from gorgona_booking.db.provisioning import add_membership, grant_platform_admin, provision_user
-from tests.integration.seed import FAKE_ISSUER, FakeUser, Salon, seed_user
+from tests.integration.seed import FakeUser, Salon, seed_user
+from tests.support.fake_idp import FAKE_ISSUER
 
 pytestmark = pytest.mark.anyio
 

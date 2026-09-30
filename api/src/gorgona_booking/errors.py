@@ -18,3 +18,11 @@ class NotFoundError(DomainError):
 
 class DatabaseUnavailableError(DomainError):
     code = "DATABASE_UNAVAILABLE"
+
+
+class ConflictError(DomainError):
+    code = "CONFLICT"
+
+
+class InvalidReferenceError(DomainError):
+    code = "INVALID_REFERENCE"

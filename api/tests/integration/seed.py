@@ -11,6 +11,7 @@ from gorgona_booking.db.provisioning import (
     provision_tenant,
     provision_user,
 )
+from tests.support.fake_idp import FAKE_ISSUER
 
 # A real IANA zone with DST, used only as test data (not a KA Nails location).
 FAKE_TIMEZONE = "America/New_York"
@@ -146,9 +147,6 @@ def force_hold_expired(conn: psycopg.Connection, salon: Salon, booking_id: UUID)
             "update gba.bookings set hold_expires_at = now() - interval '1 minute' where id = %s",
             (booking_id,),
         )
-
-
-FAKE_ISSUER = "https://fake-idp.test/"
 
 
 @dataclass(frozen=True, slots=True)

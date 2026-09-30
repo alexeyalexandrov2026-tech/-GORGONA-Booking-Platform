@@ -13,13 +13,30 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 
 from gorgona_booking.api.request_id import get_request_id
+from gorgona_booking.auth.principal import IdentityNotLinkedError, UserDisabledError
+from gorgona_booking.auth.verifier import (
+    AuthenticationRequiredError,
+    AuthNotConfiguredError,
+    InvalidTokenError,
+)
 from gorgona_booking.booking.models import (
     HoldExpiredError,
     IdempotencyKeyReusedError,
     InvalidTransitionError,
     SlotConflictError,
 )
-from gorgona_booking.errors import DatabaseUnavailableError, DomainError, NotFoundError
+from gorgona_booking.errors import (
+    ConflictError,
+    DatabaseUnavailableError,
+    DomainError,
+    InvalidReferenceError,
+    NotFoundError,
+)
+from gorgona_booking.tenancy.authorization import (
+    PermissionDeniedError,
+    TenantAccessDeniedError,
+    TenantSuspendedError,
+)
 
 logger = logging.getLogger("gorgona_booking.api")
 
@@ -32,6 +49,16 @@ DOMAIN_ERROR_STATUS: dict[type[DomainError], int] = {
     InvalidTransitionError: 409,
     HoldExpiredError: 409,
     IdempotencyKeyReusedError: 422,
+    ConflictError: 409,
+    InvalidReferenceError: 422,
+    AuthenticationRequiredError: 401,
+    InvalidTokenError: 401,
+    AuthNotConfiguredError: 503,
+    IdentityNotLinkedError: 403,
+    UserDisabledError: 403,
+    TenantAccessDeniedError: 403,
+    TenantSuspendedError: 403,
+    PermissionDeniedError: 403,
 }
 
 _HTTP_STATUS_CODES: Mapping[int, str] = {
@@ -72,7 +99,15 @@ def error_response(
 async def _domain_error(request: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, DomainError):
         raise TypeError(exc)
-    return error_response(request, status_for(exc), exc.code, exc.message, exc.details)
+    status = status_for(exc)
+    headers = None
+    if status == 401:
+        # RFC 6750: never echo the token; name the error only when one was presented.
+        challenge = 'Bearer realm="gorgona-booking"'
+        if isinstance(exc, InvalidTokenError):
+            challenge += ', error="invalid_token"'
+        headers = {"WWW-Authenticate": challenge}
+    return error_response(request, status, exc.code, exc.message, exc.details, headers)
 
 
 async def _validation_error(request: Request, exc: Exception) -> JSONResponse:

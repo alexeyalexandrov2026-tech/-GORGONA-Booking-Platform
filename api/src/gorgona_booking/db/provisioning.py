@@ -98,3 +98,29 @@ def grant_platform_admin(conn: psycopg.Connection, *, user_id: UUID, granted_by:
             "values (%s, 'platform_admin', %s)",
             (user_id, granted_by),
         )
+
+
+def set_membership_status(
+    conn: psycopg.Connection,
+    *,
+    tenant_id: UUID,
+    membership_id: UUID,
+    status: str,
+    actor: str = "operator",
+) -> None:
+    with owner_tenant_transaction(conn, tenant_id):
+        _set_context(conn, actor=actor)
+        conn.execute(
+            "update gba.memberships set status = %s where id = %s", (status, membership_id)
+        )
+
+
+def set_user_status(
+    conn: psycopg.Connection, *, user_id: UUID, status: str, actor: str = "operator"
+) -> None:
+    with conn.transaction():
+        _set_context(conn, user_id=str(user_id), actor=actor)
+        conn.execute(
+            "update gba.users set status = %s, updated_at = now() where id = %s",
+            (status, user_id),
+        )

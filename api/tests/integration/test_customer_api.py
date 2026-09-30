@@ -1,6 +1,7 @@
 import asyncio
 import secrets
 from collections.abc import AsyncIterator
+from datetime import datetime, timedelta
 from uuid import UUID
 
 import httpx
@@ -219,6 +220,14 @@ async def test_artist_schedule_blocks_and_off_grid(
     customer_client: httpx.AsyncClient, world: BookingWorld, owner_conn: psycopg.Connection
 ) -> None:
     slot = await first_slot(customer_client, world)
+    off_grid = {
+        **slot,
+        "start_at": (datetime.fromisoformat(slot["start_at"]) + timedelta(minutes=1)).isoformat(),
+    }
+    response = await hold(
+        customer_client, world, off_grid, secrets.token_urlsafe(32), "off-grid-01"
+    )
+    assert response.status_code == 409
     with owner_tenant_transaction(owner_conn, world.a.tenant_id):
         owner_conn.execute(
             "insert into gba.resource_blocks "

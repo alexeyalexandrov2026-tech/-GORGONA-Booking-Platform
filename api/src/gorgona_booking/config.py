@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
@@ -15,6 +16,7 @@ _ENV_FIELDS: Mapping[str, str] = {
     "GBA_DB_POOL_MIN_SIZE": "db_pool_min_size",
     "GBA_DB_POOL_MAX_SIZE": "db_pool_max_size",
     "GBA_HOLD_TTL_SECONDS": "hold_ttl_seconds",
+    "GBA_CUSTOMER_WEB_DIR": "customer_web_dir",
     "GBA_AUTH_ISSUER": "auth_issuer",
     "GBA_AUTH_AUDIENCE": "auth_audience",
     "GBA_AUTH_JWKS_URL": "auth_jwks_url",
@@ -35,6 +37,7 @@ class Settings(BaseModel):
     db_pool_min_size: int = Field(default=1, ge=1, le=100)
     db_pool_max_size: int = Field(default=10, ge=1, le=500)
     hold_ttl_seconds: int = Field(default=600, ge=60, le=3600)
+    customer_web_dir: Path | None = None
     # External OIDC provider (ADR-0007). All three or none.
     auth_issuer: str | None = None
     auth_audience: str | None = None

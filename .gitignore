@@ -13,3 +13,7 @@ coverage/
 *.log
 .mypy_cache/
 .ruff_cache/
+web/out/
+web/test-results/
+web/playwright-report/
+*.tsbuildinfo

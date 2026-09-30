@@ -23,6 +23,7 @@ jobs:
       GBA_TEST_ADMIN_DSN: postgresql://gba_superuser:ci-only-not-a-secret@127.0.0.1:55432/postgres
       # Missing PostgreSQL must fail CI, never skip the integration tests.
       GBA_REQUIRE_POSTGRES: "1"
+      GBA_REQUIRE_BROWSER: "1"
     steps:
       - uses: actions/checkout@v5
 
@@ -32,6 +33,22 @@ jobs:
 
       - run: uv python install 3.14
       - run: uv sync --locked
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build and check customer web
+        working-directory: web
+        run: |
+          npm ci --ignore-scripts
+          npm run typecheck
+          npm run lint
+          npm run format:check
+          npm run build
+          npx playwright install --with-deps chromium
 
       - name: Start PostgreSQL 18
         run: |

@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from gorgona_booking.api import customer, health, holds, members, platform, salons, setup
 from gorgona_booking.api.errors import install_error_handlers
@@ -83,6 +84,11 @@ def create_app(
     app.include_router(setup.router)
     app.include_router(platform.router)
     app.include_router(customer.router)
+    if settings.customer_web_dir is not None:
+        # API routes are registered first. The export and APIs share the trusted Host.
+        app.mount(
+            "/", StaticFiles(directory=settings.customer_web_dir, html=True), name="customer-web"
+        )
     return app
 
 

@@ -19,6 +19,8 @@ def main() -> None:
         host=os.environ.get("GBA_HOST", "127.0.0.1"),
         port=int(os.environ.get("GBA_PORT", "8000")),
         proxy_headers=False,
+        # Finish in-flight requests on SIGTERM within the platform's grace period (30 s).
+        timeout_graceful_shutdown=25,
     )
     server = uvicorn.Server(config)
     loop_factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None

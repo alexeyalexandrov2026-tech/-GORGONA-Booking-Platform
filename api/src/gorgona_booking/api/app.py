@@ -21,6 +21,7 @@ from gorgona_booking.db.pool import (
     create_runtime_pool,
     pool_readiness_probe,
 )
+from gorgona_booking.observability import AccessLogMiddleware
 
 
 def create_app(
@@ -85,6 +86,8 @@ def create_app(
     if settings.trusted_proxy == "azure_front_door" and settings.front_door_id is not None:
         # Added before RequestIdMiddleware, so it runs inside it: refusals carry a request ID.
         app.add_middleware(AzureFrontDoorMiddleware, front_door_id=settings.front_door_id)
+    # Inside RequestIdMiddleware (so the request ID is known), outside everything else.
+    app.add_middleware(AccessLogMiddleware)
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
     app.include_router(health.router)

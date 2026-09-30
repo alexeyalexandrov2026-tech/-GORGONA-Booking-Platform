@@ -34,6 +34,7 @@ from gorgona_booking.errors import (
     NotFoundError,
 )
 from gorgona_booking.identity import invitations as inv
+from gorgona_booking.observability import record_domain_error, route_template
 from gorgona_booking.onboarding.service import NotReadyError, OnboardingConflictError
 from gorgona_booking.tenancy.authorization import (
     PermissionDeniedError,
@@ -118,6 +119,7 @@ async def _domain_error(request: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, DomainError):
         raise TypeError(exc)
     status = status_for(exc)
+    record_domain_error(exc.code, route_template(request.scope))
     headers = None
     if status == 401:
         # RFC 6750: never echo the token; name the error only when one was presented.

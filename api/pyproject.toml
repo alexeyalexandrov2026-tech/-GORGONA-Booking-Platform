@@ -12,6 +12,10 @@ dependencies = [
     "tzdata>=2025.2",
     "uvicorn>=0.34",
     "pyjwt[crypto]>=2.10",
+    "opentelemetry-sdk>=1.39",
+    "azure-monitor-opentelemetry-exporter>=1.0.0b44",
+    "opentelemetry-instrumentation-fastapi>=0.60b0",
+    "opentelemetry-instrumentation-psycopg>=0.60b0",
 ]
 
 [project.scripts]

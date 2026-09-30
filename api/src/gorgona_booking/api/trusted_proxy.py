@@ -17,6 +17,7 @@ from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from gorgona_booking.api.errors import error_response
+from gorgona_booking.observability import record_domain_error
 
 logger = logging.getLogger("gorgona_booking.trusted_proxy")
 
@@ -55,6 +56,7 @@ class AzureFrontDoorMiddleware:
                 "request refused at trusted-proxy boundary",
                 extra={"reason": "profile_id" if not from_our_front_door else "forwarded_host"},
             )
+            record_domain_error("TENANT_NOT_FOUND", "trusted_proxy")
             response = error_response(Request(scope), 404, "TENANT_NOT_FOUND", "Unknown site")
             await response(scope, receive, send)
             return

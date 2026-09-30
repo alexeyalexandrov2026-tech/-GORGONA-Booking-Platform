@@ -8,6 +8,7 @@ Note: the postgres image's bootstrap user is a real superuser. Bootstrap against
 Azure admin (not a superuser) remains a staging acceptance item.
 """
 
+import json
 import os
 import secrets
 import shutil
@@ -214,6 +215,13 @@ def test_api_container_serves_health_web_and_a_real_booking(stack: Stack) -> Non
                 "select status from gba.bookings where id = %s", (booking_id,)
             ).fetchone()
         assert row == ("CONFIRMED",)
+
+        logs = _docker("logs", name).stdout.splitlines()
+        records = [json.loads(line) for line in logs if line.strip()]  # every line is JSON
+        operations = {r.get("operation") for r in records}
+        assert "POST /v1/customer/bookings/{booking_id}/confirm" in operations
+        assert str(booking_id) not in "\n".join(logs)
+        assert str(DETAILS["email"]) not in "\n".join(logs)
 
         started = time.monotonic()
         _docker("stop", "--time", "30", name)

@@ -27,6 +27,8 @@ _ENV_FIELDS: Mapping[str, str] = {
     "GBA_AUTH_JWKS_URL": "auth_jwks_url",
     "GBA_AUTH_ALGORITHMS": "auth_algorithms",
     "GBA_AUTH_LEEWAY_SECONDS": "auth_leeway_seconds",
+    # Standard Azure Monitor variable; export is off when unset.
+    "APPLICATIONINSIGHTS_CONNECTION_STRING": "applicationinsights_connection_string",
 }
 _LIST_FIELDS = frozenset({"auth_algorithms"})
 # Asymmetric only (ADR-0007); mirrors gorgona_booking.auth.verifier.ALLOWED_ALGORITHMS.
@@ -52,6 +54,7 @@ class Settings(BaseModel):
     auth_jwks_url: str | None = None
     auth_algorithms: tuple[str, ...] = ("RS256", "ES256")
     auth_leeway_seconds: int = Field(default=30, ge=0, le=300)
+    applicationinsights_connection_string: SecretStr | None = None
 
     @model_validator(mode="after")
     def _pool_bounds(self) -> Self:

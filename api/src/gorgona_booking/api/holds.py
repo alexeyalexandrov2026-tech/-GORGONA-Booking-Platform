@@ -69,7 +69,9 @@ async def get_tenant_id(request: Request) -> UUID:
     pool = getattr(request.app.state, "pool", None)
     if pool is None:
         raise DatabaseUnavailableError("Booking is not available right now")
-    return await resolve_tenant_by_host(pool, request.headers.get("host", ""))
+    tenant_id = await resolve_tenant_by_host(pool, request.headers.get("host", ""))
+    request.state.tenant_id = tenant_id  # for request logs (UUID only)
+    return tenant_id
 
 
 @router.post("/holds", status_code=201)

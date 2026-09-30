@@ -10,6 +10,7 @@ from gorgona_booking.api import customer, health, holds, members, platform, salo
 from gorgona_booking.api.errors import install_error_handlers
 from gorgona_booking.api.health import ReadinessProbe
 from gorgona_booking.api.request_id import RequestIdMiddleware
+from gorgona_booking.api.trusted_proxy import AzureFrontDoorMiddleware
 from gorgona_booking.auth.verifier import OidcJwtVerifier, RemoteJwksKeySource, TokenVerifier
 from gorgona_booking.booking.service import BookingService
 from gorgona_booking.config import Settings, assert_environment_allowed
@@ -75,6 +76,9 @@ def create_app(
         pool_readiness_probe(pool) if pool is not None else None
     )
 
+    if settings.trusted_proxy == "azure_front_door" and settings.front_door_id is not None:
+        # Added before RequestIdMiddleware, so it runs inside it: refusals carry a request ID.
+        app.add_middleware(AzureFrontDoorMiddleware, front_door_id=settings.front_door_id)
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
     app.include_router(health.router)

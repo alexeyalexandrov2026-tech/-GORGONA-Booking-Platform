@@ -4,10 +4,13 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal, Self
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 type Environment = Literal["local", "test", "ci", "staging", "production"]
+# "none": only the Host header names the tenant (M1-M3). "azure_front_door": see ADR-0012.
+type TrustedProxy = Literal["none", "azure_front_door"]
 
 # Environment variable -> Settings field. Nothing else is read from the environment.
 _ENV_FIELDS: Mapping[str, str] = {
@@ -17,6 +20,8 @@ _ENV_FIELDS: Mapping[str, str] = {
     "GBA_DB_POOL_MAX_SIZE": "db_pool_max_size",
     "GBA_HOLD_TTL_SECONDS": "hold_ttl_seconds",
     "GBA_CUSTOMER_WEB_DIR": "customer_web_dir",
+    "GBA_TRUSTED_PROXY": "trusted_proxy",
+    "GBA_FRONT_DOOR_ID": "front_door_id",
     "GBA_AUTH_ISSUER": "auth_issuer",
     "GBA_AUTH_AUDIENCE": "auth_audience",
     "GBA_AUTH_JWKS_URL": "auth_jwks_url",
@@ -38,6 +43,9 @@ class Settings(BaseModel):
     db_pool_max_size: int = Field(default=10, ge=1, le=500)
     hold_ttl_seconds: int = Field(default=600, ge=60, le=3600)
     customer_web_dir: Path | None = None
+    # Trusted reverse proxy. Front Door mode requires the profile ID (X-Azure-FDID).
+    trusted_proxy: TrustedProxy = "none"
+    front_door_id: str | None = None
     # External OIDC provider (ADR-0007). All three or none.
     auth_issuer: str | None = None
     auth_audience: str | None = None
@@ -49,6 +57,26 @@ class Settings(BaseModel):
     def _pool_bounds(self) -> Self:
         if self.db_pool_max_size < self.db_pool_min_size:
             raise ValueError("GBA_DB_POOL_MAX_SIZE must be >= GBA_DB_POOL_MIN_SIZE")
+        return self
+
+    @field_validator("front_door_id")
+    @classmethod
+    def _front_door_id_is_uuid(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            return str(UUID(value))
+        except ValueError:
+            raise ValueError(
+                "GBA_FRONT_DOOR_ID must be the Front Door profile ID (a UUID)"
+            ) from None
+
+    @model_validator(mode="after")
+    def _proxy_settings(self) -> Self:
+        if self.trusted_proxy == "azure_front_door" and self.front_door_id is None:
+            raise ValueError("GBA_TRUSTED_PROXY=azure_front_door requires GBA_FRONT_DOOR_ID")
+        if self.trusted_proxy == "none" and self.front_door_id is not None:
+            raise ValueError("GBA_FRONT_DOOR_ID requires GBA_TRUSTED_PROXY=azure_front_door")
         return self
 
     @model_validator(mode="after")

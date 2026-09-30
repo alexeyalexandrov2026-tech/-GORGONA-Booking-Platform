@@ -20,8 +20,8 @@ param appInsightsId string
 @description('Container registry ID (shared).')
 param containerRegistryId string
 
-@description('CPU cluster VM size.')
-param cpuVmSize string = 'Standard_D4s_v5'
+@description('CPU cluster VM size (must be an Azure ML-supported size in the region; D4s_v5 is not, D4ds_v5 is).')
+param cpuVmSize string = 'Standard_D4ds_v5'
 
 @description('CPU cluster max nodes.')
 param cpuMaxNodes int = 2

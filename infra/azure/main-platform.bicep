@@ -109,6 +109,11 @@ module network 'modules/network.bicep' = {
     peSubnetPrefix: peSubnetPrefix
     privateDnsZoneNames: dnsZones
   }
+  // Fail fast and cheap: Front Door is the resource most likely to be refused (for
+  // example on Free Trial subscriptions). Everything billable (PostgreSQL, private
+  // endpoints, Key Vault, Container Apps) sits behind the network, so nothing billable
+  // is created unless the Front Door profile succeeds first. Ordering only.
+  dependsOn: [frontDoor]
 }
 
 module identities 'modules/identities.bicep' = {

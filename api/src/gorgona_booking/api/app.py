@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from gorgona_booking.api import customer, health, holds, members, platform, salons, setup
 from gorgona_booking.api.errors import install_error_handlers
+from gorgona_booking.api.framing import FramingPolicyMiddleware
 from gorgona_booking.api.health import ReadinessProbe
 from gorgona_booking.api.request_id import RequestIdMiddleware
 from gorgona_booking.api.trusted_proxy import AzureFrontDoorMiddleware
@@ -76,6 +77,11 @@ def create_app(
         pool_readiness_probe(pool) if pool is not None else None
     )
 
+    # Innermost: sees the effective (tenant) Host after the trusted-proxy rewrite.
+    app.add_middleware(
+        FramingPolicyMiddleware,
+        allow_loopback=settings.environment in ("local", "test", "ci"),
+    )
     if settings.trusted_proxy == "azure_front_door" and settings.front_door_id is not None:
         # Added before RequestIdMiddleware, so it runs inside it: refusals carry a request ID.
         app.add_middleware(AzureFrontDoorMiddleware, front_door_id=settings.front_door_id)

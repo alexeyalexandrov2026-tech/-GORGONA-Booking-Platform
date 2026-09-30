@@ -195,42 +195,77 @@ test("availability network failure has a usable retry", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^\d/ }).first()).toBeVisible();
 });
 
-// Documents a known security finding (M3_REPORT: "Clickjacking: /book/ framable by
-// any origin"). No framing policy is emitted yet. When one lands, invert this test
-// to assert that a non-allowlisted origin is refused.
-test("SECURITY GAP (invert when framing policy lands): /book/ is framable by an arbitrary origin", async ({
+// Governed framing policy (ADR-0012), closing the M3 clickjacking finding. Embedders
+// are real loopback servers on their own ports, so they are distinct origins and
+// Chromium's Private Network Access rules do not mask the policy.
+async function withEmbedder(
+  port: number,
+  booking: string,
+  run: (origin: string) => Promise<void>,
+) {
+  const embedder = createServer((_, response) => {
+    response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    response.end(
+      `<!doctype html><title>Embedder</title><iframe title="embedded" src="${booking}" width="800" height="900"></iframe>`,
+    );
+  });
+  await new Promise<void>((resolve) =>
+    embedder.listen(port, "127.0.0.1", resolve),
+  );
+  try {
+    const { port: bound } = embedder.address() as AddressInfo;
+    const origin = `http://127.0.0.1:${bound}`;
+    expect(origin).not.toBe(new URL(booking).origin);
+    await run(origin);
+  } finally {
+    await new Promise((resolve) => embedder.close(resolve));
+  }
+}
+
+test("framing: an unapproved origin is BLOCKED by frame-ancestors", async ({
   page,
   request,
   baseURL,
 }) => {
   const booking = `${baseURL}/book/`;
-  const headers = (await request.get(booking)).headers();
-  expect(headers["x-frame-options"]).toBeUndefined();
-  expect(headers["content-security-policy"] ?? "").not.toContain(
-    "frame-ancestors",
+  expect(
+    (await request.get(booking)).headers()["content-security-policy"],
+  ).toBe(
+    `frame-ancestors 'self' http://127.0.0.1:${process.env.GBA_APPROVED_EMBED_PORT}`,
   );
-  // A real, never-approved embedder origin: a separate loopback server on its own
-  // port. It stays on loopback so Chromium's Private Network Access rules (which
-  // would not apply to a public booking Host) do not mask the platform's policy.
-  const embedder = createServer((_, response) => {
-    response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    response.end(
-      `<!doctype html><title>Unapproved embedder</title><iframe title="embedded" src="${booking}" width="800" height="900"></iframe>`,
+  await withEmbedder(0, booking, async (origin) => {
+    const refused = page.waitForEvent("console", (message) =>
+      message.text().includes("frame-ancestors"),
     );
-  });
-  await new Promise<void>((resolve) =>
-    embedder.listen(0, "127.0.0.1", resolve),
-  );
-  try {
-    const { port } = embedder.address() as AddressInfo;
-    const origin = `http://127.0.0.1:${port}`;
-    expect(origin).not.toBe(new URL(booking).origin);
     await page.goto(`${origin}/`);
-    const frame = page.frameLocator('iframe[title="embedded"]');
-    await expect(frame.getByLabel("Service and variant")).toBeVisible();
-  } finally {
-    await new Promise((resolve) => embedder.close(resolve));
-  }
+    await refused;
+    await expect(
+      page
+        .frameLocator('iframe[title="embedded"]')
+        .getByLabel("Service and variant"),
+    ).toHaveCount(0);
+  });
+});
+
+test("framing: the approved test origin is ALLOWED and top-level still works", async ({
+  page,
+  baseURL,
+}) => {
+  const booking = `${baseURL}/book/`;
+  await withEmbedder(
+    Number(process.env.GBA_APPROVED_EMBED_PORT),
+    booking,
+    async (origin) => {
+      await page.goto(`${origin}/`);
+      await expect(
+        page
+          .frameLocator('iframe[title="embedded"]')
+          .getByLabel("Service and variant"),
+      ).toBeVisible();
+    },
+  );
+  await page.goto(booking);
+  await expect(page.getByLabel("Service and variant")).toBeVisible();
 });
 
 test("expiry response returns to availability (contract fault injection)", async ({

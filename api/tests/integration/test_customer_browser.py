@@ -18,6 +18,7 @@ from pydantic import SecretStr
 from gorgona_booking.api.app import create_app
 from gorgona_booking.config import Settings
 from gorgona_booking.db.provisioning import owner_tenant_transaction
+from gorgona_booking.tenancy.embedding import add_embed_origin
 from tests.integration.booking_support import BookingWorld
 from tests.integration.conftest import ProvisionedDatabase
 from tests.integration.customer_support import customer_day, seed_customer_setup
@@ -35,7 +36,17 @@ def test_real_customer_browser(
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        approved_embed_port = sock.getsockname()[1]
     host = f"127.0.0.1:{port}"
+    # The governed allowlist approves exactly one FAKE embedder origin for tenant A.
+    add_embed_origin(
+        owner_conn,
+        world.a.tenant_id,
+        f"http://127.0.0.1:{approved_embed_port}",
+        actor="test:browser-bridge",
+    )
     with owner_tenant_transaction(owner_conn, world.a.tenant_id):
         owner_conn.execute(
             "insert into gba.tenant_hosts (host, tenant_id) values (%s, %s)",
@@ -84,7 +95,11 @@ def test_real_customer_browser(
             time.sleep(0.05)
         assert server.started, "local browser fixture server did not start"
         env = {k: v for k, v in os.environ.items() if "DSN" not in k and "DATABASE_URL" not in k}
-        env.update(GBA_BROWSER_URL=f"http://{host}", GBA_BROWSER_DAY=customer_day())
+        env.update(
+            GBA_BROWSER_URL=f"http://{host}",
+            GBA_BROWSER_DAY=customer_day(),
+            GBA_APPROVED_EMBED_PORT=str(approved_embed_port),
+        )
         result = subprocess.run(  # noqa: S603 - fixed repository script, located npm executable
             [npm, "run", "test:e2e"],
             cwd=web,

@@ -129,6 +129,28 @@ def _go_live(args: argparse.Namespace) -> None:
     print(f"salon {args.slug} is live")
 
 
+def _embed_origin(args: argparse.Namespace) -> None:
+    from gorgona_booking.onboarding.service import stable_id
+    from gorgona_booking.tenancy.embedding import (
+        add_embed_origin,
+        list_embed_origins,
+        revoke_embed_origin,
+    )
+
+    if args.action != "list" and not args.origin:
+        raise SystemExit(f"embed-origin {args.action} needs an origin, e.g. https://salon.example")
+    tenant_id = stable_id(None, "tenant", args.slug)
+    with _owner_conn() as conn:
+        if args.action == "add":
+            add_embed_origin(conn, tenant_id, args.origin, actor=_operator())
+        elif args.action == "revoke":
+            revoke_embed_origin(conn, tenant_id, args.origin, actor=_operator())
+        rows = list_embed_origins(conn, tenant_id)
+    print(f"embed origins for {args.slug}:")
+    for origin, status in rows:
+        print(f"  {status} {origin}")
+
+
 def _link_user(args: argparse.Namespace) -> None:
     with _owner_conn() as conn:
         user_id = provision_user(
@@ -182,6 +204,13 @@ def main(argv: list[str] | None = None) -> None:
     live = commands.add_parser("go-live", help="open public booking if the salon is ready")
     live.add_argument("slug")
     live.set_defaults(run=_go_live)
+    embed = commands.add_parser(
+        "embed-origin", help="approve/revoke/list origins allowed to frame a salon's booking pages"
+    )
+    embed.add_argument("action", choices=["add", "revoke", "list"])
+    embed.add_argument("slug")
+    embed.add_argument("origin", nargs="?")
+    embed.set_defaults(run=_embed_origin)
     link = commands.add_parser("link-user", help="create a user for an external identity")
     for flag in ("--issuer", "--subject", "--display-name"):
         link.add_argument(flag, required=True)

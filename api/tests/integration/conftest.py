@@ -19,7 +19,8 @@ from psycopg.conninfo import make_conninfo
 from gorgona_booking.db.bootstrap import BootstrapSpec, bootstrap
 from gorgona_booking.db.migrate import apply_migrations
 from gorgona_booking.db.pool import RuntimePool, create_runtime_pool
-from tests.integration.seed import Salon, seed_salon
+from tests.integration.booking_support import BookingWorld
+from tests.integration.seed import Salon, seed_fake_catalog, seed_resource, seed_salon
 
 TEST_OWNER_ROLE = "gba_test_owner"
 TEST_APP_ROLE = "gba_test_app"
@@ -105,3 +106,17 @@ async def app_pool(test_database: ProvisionedDatabase) -> AsyncIterator[RuntimeP
 def salons(owner_conn: psycopg.Connection) -> tuple[Salon, Salon]:
     """Two fake salons with one fake location each."""
     return seed_salon(owner_conn, "a"), seed_salon(owner_conn, "b")
+
+
+@pytest.fixture
+def world(owner_conn: psycopg.Connection, salons: tuple[Salon, Salon]) -> BookingWorld:
+    a, b = salons
+    return BookingWorld(
+        a=a,
+        b=b,
+        catalog_a=seed_fake_catalog(owner_conn, a),
+        catalog_b=seed_fake_catalog(owner_conn, b),
+        artist_a1=seed_resource(owner_conn, a, "FAKE artist A1"),
+        artist_a2=seed_resource(owner_conn, a, "FAKE artist A2"),
+        artist_b1=seed_resource(owner_conn, b, "FAKE artist B1"),
+    )

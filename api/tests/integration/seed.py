@@ -122,3 +122,23 @@ def seed_fake_catalog(conn: psycopg.Connection, salon: Salon) -> FakeCatalog:
                 [("PROVIDES", "FAKE_FRENCH_DESIGN"), ("REQUIRES", "FAKE_GEL_COVERAGE")],
             ),
         )
+
+
+def seed_resource(conn: psycopg.Connection, salon: Salon, name: str = "FAKE artist") -> UUID:
+    with owner_tenant_transaction(conn, salon.tenant_id):
+        row = conn.execute(
+            "insert into gba.resources (tenant_id, location_id, kind, display_name) "
+            "values (%s, %s, 'artist', %s) returning id",
+            (salon.tenant_id, salon.location_id, name),
+        ).fetchone()
+    assert row is not None
+    return UUID(str(row[0]))
+
+
+def force_hold_expired(conn: psycopg.Connection, salon: Salon, booking_id: UUID) -> None:
+    """Simulate the passage of time: move a hold's expiry into the past."""
+    with owner_tenant_transaction(conn, salon.tenant_id):
+        conn.execute(
+            "update gba.bookings set hold_expires_at = now() - interval '1 minute' where id = %s",
+            (booking_id,),
+        )

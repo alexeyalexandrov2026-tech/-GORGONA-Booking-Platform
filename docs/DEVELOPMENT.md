@@ -36,6 +36,20 @@ uv run --env-file ../.env pytest
 
 Set `GBA_TEST_KEEP_DB=1` to keep the test database for inspection.
 
+## Local database and API
+
+```bash
+cd api
+uv run --env-file ../.env gba-db bootstrap            # superuser: roles + database
+uv run --env-file ../.env gba-db migrate              # owner: apply migrations
+uv run --env-file ../.env gba-db check-runtime-role   # runtime role cannot bypass RLS
+uv run --env-file ../.env python -m gorgona_booking   # API on 127.0.0.1:8000
+```
+
+Tenants, host mappings and catalog data are provisioned by the owner role (see `gorgona_booking.db.provisioning`). Nothing seeds KA Nails data: `api/fixtures/ka_nails_catalog.candidate.json` is owner-unconfirmed and never loaded into a database.
+
+`POST /v1/holds` resolves the salon from the `Host` header through `gba.tenant_hosts`. It has no authentication or rate limiting and must not be exposed publicly.
+
 ## Credentials
 
 | Credential | Used by | Never used by |

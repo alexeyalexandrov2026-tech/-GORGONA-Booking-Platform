@@ -37,6 +37,9 @@ def seed_salon(conn: psycopg.Connection, label: str) -> Salon:
             "returning id",
             (tenant_id, f"FAKE location {label.upper()}", FAKE_TIMEZONE),
         ).fetchone()
+        # M2 (owner decision 2): public booking requires an explicit go-live. FAKE test
+        # salons are published owner-side so M1 booking tests exercise the same paths.
+        conn.execute("update gba.tenants set booking_state = 'live' where id = %s", (tenant_id,))
     assert row is not None
     return Salon(tenant_id=tenant_id, slug=slug, host=host, location_id=row[0])
 

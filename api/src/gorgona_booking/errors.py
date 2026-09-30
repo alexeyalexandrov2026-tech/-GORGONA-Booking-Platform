@@ -6,7 +6,7 @@ from typing import ClassVar
 class DomainError(Exception):
     code: ClassVar[str] = "DOMAIN_ERROR"
 
-    def __init__(self, message: str, **details: str | int | None) -> None:
+    def __init__(self, message: str, **details: object) -> None:
         super().__init__(message)
         self.message = message
         self.details = details

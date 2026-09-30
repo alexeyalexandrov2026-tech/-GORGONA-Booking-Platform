@@ -1,0 +1,45 @@
+{
+  "spec_version": 1,
+  "slug": "ka-nails",
+  "display_name": "KA Nails",
+  "location_name": "KA Nails",
+  "catalog": {
+    "status": "unconfirmed",
+    "source": "Owner product brief sections 20-22 (2026-09-30); prices only, booking durations not supplied",
+    "value": [
+      {
+        "service_code": "HAMMAM",
+        "service_name": "Hammam",
+        "code": "HAMMAM_LUXURY",
+        "name": "Hammam Luxury",
+        "price_cents": 14500,
+        "currency": "USD"
+      },
+      {
+        "service_code": "HAMMAM",
+        "service_name": "Hammam",
+        "code": "HAMMAM_LUXURY_GEL",
+        "name": "Hammam Luxury + Gel Polish",
+        "price_cents": 16000,
+        "currency": "USD",
+        "display_duration_minutes": [120, 145]
+      },
+      {
+        "service_code": "HAMMAM",
+        "service_name": "Hammam",
+        "code": "HAMMAM_LUXURY_GEL_FRENCH",
+        "name": "Hammam Luxury + Gel French",
+        "price_cents": 17500,
+        "currency": "USD",
+        "display_duration_minutes": [130, 155]
+      }
+    ]
+  },
+  "branding": [
+    {
+      "kind": "logo",
+      "asset_ref": "assets/brand/ka-nails-logo.png",
+      "sha256": "bb2fe1c05eb7183b8b8f55eee861b06d80256cf5349b2958e1432fa3b83fbf53"
+    }
+  ]
+}

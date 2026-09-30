@@ -193,7 +193,17 @@ async def test_security_sensitive_changes_are_audited_without_secrets(
         )
     assert ("user.created",) in platform
     async with runtime_tx(app_pool, tenant=b.tenant_id) as conn:
-        assert await _rows(conn, "select 1 from gba.audit_events") == []
+        # Salon A's events are invisible from salon B.
+        assert (
+            await _rows(conn, "select 1 from gba.audit_events where tenant_id = %s", a.tenant_id)
+            == []
+        )
+        assert (
+            await _rows(
+                conn, "select 1 from gba.audit_events where target_id = %s", str(membership)
+            )
+            == []
+        )
 
 
 async def test_audit_log_is_append_only_for_the_runtime_role(
@@ -247,7 +257,9 @@ async def test_tenant_status_change_requires_platform_admin(
         )
         assert cur.rowcount == 1
         events = await _rows(
-            conn, "select actor, details from gba.audit_events where action = 'tenant.updated'"
+            conn,
+            "select actor, details from gba.audit_events "
+            "where action = 'tenant.updated' and details ? 'status'",
         )
     assert events == [("platform:test", {"status": {"from": "active", "to": "suspended"}})]
     with pytest.raises(errors.InsufficientPrivilege):

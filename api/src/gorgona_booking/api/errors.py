@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 
 from gorgona_booking.api.request_id import get_request_id
+from gorgona_booking.api.setup import InvalidBusinessHoursError, SalonIsLiveError, UnknownFactError
 from gorgona_booking.auth.principal import IdentityNotLinkedError, UserDisabledError
 from gorgona_booking.auth.verifier import (
     AuthenticationRequiredError,
@@ -33,6 +34,7 @@ from gorgona_booking.errors import (
     NotFoundError,
 )
 from gorgona_booking.identity import invitations as inv
+from gorgona_booking.onboarding.service import NotReadyError, OnboardingConflictError
 from gorgona_booking.tenancy.authorization import (
     PermissionDeniedError,
     TenantAccessDeniedError,
@@ -70,6 +72,11 @@ DOMAIN_ERROR_STATUS: dict[type[DomainError], int] = {
     inv.CannotModifySelfError: 409,
     inv.LastOwnerError: 409,
     inv.MembershipRevokedError: 409,
+    InvalidBusinessHoursError: 422,
+    UnknownFactError: 422,
+    SalonIsLiveError: 409,
+    NotReadyError: 409,
+    OnboardingConflictError: 409,
 }
 
 _HTTP_STATUS_CODES: Mapping[int, str] = {

@@ -11,6 +11,7 @@ from gorgona_booking.api.request_id import get_request_id
 from gorgona_booking.auth.permissions import Permission
 from gorgona_booking.auth.principal import Principal
 from gorgona_booking.errors import NotFoundError
+from gorgona_booking.onboarding.service import go_live
 from gorgona_booking.tenancy.authorization import authorized_tenant
 
 router = APIRouter(prefix="/v1/platform", tags=["platform"])
@@ -57,3 +58,24 @@ async def reactivate(
     salon_id: UUID, request: Request, principal: CurrentPrincipal
 ) -> TenantStatusView:
     return await _set_status(request, principal, salon_id, "active")
+
+
+class GoLiveView(BaseModel):
+    salon_id: UUID
+    booking_state: str
+
+
+@router.post("/salons/{salon_id}/go-live")
+async def go_live_route(
+    salon_id: UUID, request: Request, principal: CurrentPrincipal
+) -> GoLiveView:
+    """Open public booking, only if every required fact is present and confirmed."""
+    async with authorized_tenant(
+        runtime_pool(request),
+        principal,
+        salon_id,
+        Permission.PLATFORM_GO_LIVE,
+        request_id=get_request_id(request),
+    ) as access:
+        await go_live(access.conn, salon_id)
+    return GoLiveView(salon_id=salon_id, booking_state="live")

@@ -29,8 +29,10 @@ async def resolve_tenant_by_host(pool: RuntimePool, raw_host: str) -> UUID:
             raise TenantNotFoundError("Unknown site")
         tenant_id = UUID(str(row[0]))
         await set_tenant_context(conn, tenant_id)
-        status = await (await conn.execute("select status from gba.tenants")).fetchone()
-    # A suspended tenant is indistinguishable from an unknown one.
-    if status is None or status[0] != "active":
+        status = await (
+            await conn.execute("select status, booking_state from gba.tenants")
+        ).fetchone()
+    # A suspended or not-yet-live salon is indistinguishable from an unknown one (ADR-0010).
+    if status is None or status[0] != "active" or status[1] != "live":
         raise TenantNotFoundError("Unknown site")
     return tenant_id

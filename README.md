@@ -1,6 +1,6 @@
 # GORGONA Booking AI
 
-KA Nails is the first planned tenant of a reusable appointment platform. This repository contains the Phase 0 audit and architecture package and the **M1 local booking foundation** (`api/`): tenancy with forced RLS, catalog bookability rules, and holds protected by a PostgreSQL exclusion constraint. See [`docs/plan/M1_REPORT.md`](docs/plan/M1_REPORT.md) for what is tested and what is still BLOCKED. Its PostgreSQL integration tests have not been executed yet. Nothing is deployed, and there is no payment, AI, customer UI or admin service.
+KA Nails is the first planned tenant of a reusable appointment platform. This repository contains the Phase 0 audit and architecture package and the **M1 local booking foundation** (`api/`): tenancy with forced RLS, catalog bookability rules, and holds protected by a PostgreSQL exclusion constraint. The full suite (127 tests, including every PostgreSQL 18 integration test and both 100-way races) passes against a real, local PostgreSQL 18.6 server; see [`docs/plan/M1_REPORT.md`](docs/plan/M1_REPORT.md). The OCI database VM is still blocked by A1 capacity. Nothing is deployed, and there is no payment, AI, customer UI or admin service.
 
 ## Current state
 

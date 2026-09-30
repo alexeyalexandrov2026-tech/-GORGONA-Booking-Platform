@@ -50,6 +50,32 @@ Tenants, host mappings and catalog data are provisioned by the owner role (see `
 
 `POST /v1/holds` resolves the salon from the `Host` header through `gba.tenant_hosts`. It has no authentication or rate limiting and must not be exposed publicly.
 
+## Authentication (M2)
+
+Staff and admin routes need an external OIDC identity provider (ADR-0007). Set all three or none:
+
+```
+GBA_AUTH_ISSUER=https://<your-idp>/
+GBA_AUTH_AUDIENCE=<api audience>
+GBA_AUTH_JWKS_URL=https://<your-idp>/.well-known/jwks.json
+# optional: GBA_AUTH_ALGORITHMS=RS256,ES256   GBA_AUTH_LEEWAY_SECONDS=30
+```
+
+Without them, protected routes answer `503 AUTH_NOT_CONFIGURED`. Tests use a FAKE IdP (`tests/support/fake_idp.py`) with local keys and no network.
+
+## Salon onboarding (M2, owner credential)
+
+```bash
+cd api
+uv run --env-file ../.env gba-db onboard fixtures/ka_nails_onboarding.candidate.json
+uv run --env-file ../.env gba-db readiness ka-nails        # exit 2 while facts are missing/unconfirmed
+uv run --env-file ../.env gba-db go-live ka-nails         # refuses until readiness passes
+uv run --env-file ../.env gba-db link-user --issuer https://<idp>/ --subject <sub> --display-name "<name>"
+uv run --env-file ../.env gba-db grant-platform-admin --issuer https://<idp>/ --subject <sub>
+```
+
+A spec that invites the first owner needs `--invitation-token-file PATH`. The token is written there once and never printed. Only its SHA-256 is stored.
+
 ## Credentials
 
 | Credential | Used by | Never used by |

@@ -13,7 +13,7 @@ from gorgona_booking.db.pool import (
     unscoped_transaction,
 )
 from tests.integration.conftest import ProvisionedDatabase
-from tests.integration.seed import Salon
+from tests.integration.seed import Salon, seed_user
 
 pytestmark = pytest.mark.anyio
 
@@ -98,15 +98,16 @@ async def test_without_tenant_context_nothing_is_visible_or_writable(
 
 
 async def test_composite_foreign_key_blocks_cross_salon_reference(
-    app_pool: RuntimePool, salons: tuple[Salon, Salon]
+    app_pool: RuntimePool, salons: tuple[Salon, Salon], owner_conn: psycopg.Connection
 ) -> None:
     a, b = salons
+    user = seed_user(owner_conn, "fk")  # M2: memberships reference a user (owner decision 1)
     with pytest.raises(errors.ForeignKeyViolation):
         async with tenant_transaction(app_pool, a.tenant_id) as conn:
             await conn.execute(
-                "insert into gba.memberships (tenant_id, subject, role, location_id) "
-                "values (%s, 'fake-subject', 'artist', %s)",
-                (a.tenant_id, b.location_id),
+                "insert into gba.memberships (tenant_id, user_id, role, location_id) "
+                "values (%s, %s, 'artist', %s)",
+                (a.tenant_id, user.user_id, b.location_id),
             )
 
 

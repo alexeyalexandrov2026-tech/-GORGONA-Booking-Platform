@@ -6,7 +6,11 @@ from uuid import UUID
 
 import psycopg
 
-from gorgona_booking.db.provisioning import owner_tenant_transaction, provision_tenant
+from gorgona_booking.db.provisioning import (
+    owner_tenant_transaction,
+    provision_tenant,
+    provision_user,
+)
 
 # A real IANA zone with DST, used only as test data (not a KA Nails location).
 FAKE_TIMEZONE = "America/New_York"
@@ -142,3 +146,23 @@ def force_hold_expired(conn: psycopg.Connection, salon: Salon, booking_id: UUID)
             "update gba.bookings set hold_expires_at = now() - interval '1 minute' where id = %s",
             (booking_id,),
         )
+
+
+FAKE_ISSUER = "https://fake-idp.test/"
+
+
+@dataclass(frozen=True, slots=True)
+class FakeUser:
+    user_id: UUID
+    subject: str
+    email: str
+
+
+def seed_user(conn: psycopg.Connection, label: str) -> FakeUser:
+    """A FAKE person linked to the FAKE identity provider."""
+    subject = f"fake-sub-{label}-{secrets.token_hex(4)}"
+    email = f"{subject}@example.test"
+    user_id = provision_user(
+        conn, display_name=f"FAKE user {label}", email=email, issuer=FAKE_ISSUER, subject=subject
+    )
+    return FakeUser(user_id=user_id, subject=subject, email=email)

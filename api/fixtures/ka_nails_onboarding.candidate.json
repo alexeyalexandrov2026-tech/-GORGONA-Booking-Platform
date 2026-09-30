@@ -38,7 +38,7 @@
   "branding": [
     {
       "kind": "logo",
-      "asset_ref": "assets/brand/ka-nails-logo.png",
+      "asset_ref": "/assets/ka-nails-logo.png",
       "sha256": "bb2fe1c05eb7183b8b8f55eee861b06d80256cf5349b2958e1432fa3b83fbf53"
     }
   ]

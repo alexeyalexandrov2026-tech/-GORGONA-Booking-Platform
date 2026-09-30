@@ -74,7 +74,7 @@ Shared components should be headless or use semantic component tokens. Theme var
 
 ## Brand asset rule
 
-The supplied KA Nails image is a **1254×1254 opaque PNG** with a warm cream ground, dark `KA` monogram and wordmark, and rose-gold accent. It is preserved without redrawing in [ka-nails-logo-original.png](ka-nails-logo-original.png). Use it as the primary logo on the same cream surface. Do not invert it, put it over a photograph, or claim it has transparency. A compact transparent/vector derivative requires an approved original asset or a separate logo-design decision.
+The supplied KA Nails image is a **1254×1254 opaque PNG** with a warm cream ground, dark `KA` monogram and wordmark, and rose-gold accent. It is preserved without redrawing in the separate KA-nails repository at `public/assets/ka-nails-logo.png`. Use it as the primary logo on the same cream surface. Do not invert it, put it over a photograph, or claim it has transparency. A compact transparent/vector derivative requires an approved original asset or a separate logo-design decision.
 
 ## Handoff and acceptance
 

@@ -2,7 +2,7 @@
 
 **Version:** design proposal v1, 30 September 2026  
 **Scope:** public tenant website and customer booking journey  
-**Sources:** supplied `DESIGN (3).md` (Arsenijs Fabrica style reference) and the original [KA Nails logo](ka-nails-logo-original.png). The reference is a beauty editorial direction, not a salon content template.
+**Sources:** supplied `DESIGN (3).md` (Arsenijs Fabrica style reference) and the original KA Nails logo (owned by the separate KA-nails repository at `public/assets/ka-nails-logo.png`). The reference is a beauty editorial direction, not a salon content template.
 
 ## Design idea
 

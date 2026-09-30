@@ -2,7 +2,7 @@
 
 Starting branch `m2-identity`, verified HEAD `dd272e72d947f4e8a9f7ae60fa93a2e8c6bd363b`, clean tree. M1/M2 are accepted baseline. No push or deployment.
 
-## Inspection
+## Inspection at the M2 baseline
 
 There is no customer frontend. FastAPI already exposes public `POST /v1/holds` through Host resolution and the active/live gate, plus protected staff/catalog/onboarding routes. M1 `BookingService` already creates holds, confirms them, expires them under lock, and enforces occupancy through shared repository functions, advisory locks, GiST exclusion and idempotency. It does not compute availability or validate work schedules. M2 supplies location business hours, policies, branding references and readiness, but no artist work hours, service eligibility or guest booking capability/contact record.
 

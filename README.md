@@ -1,17 +1,33 @@
 # GORGONA Booking AI
 
-KA Nails is the first planned tenant of a reusable appointment platform. This repository contains the Phase 0 audit and architecture package and the **M1 local booking foundation** (`api/`): tenancy with forced RLS, catalog bookability rules, and holds protected by a PostgreSQL exclusion constraint. M2 adds provider-agnostic OIDC authentication, server-side salon memberships, invitations, audited authorization and governed onboarding with a readiness/go-live gate. The full suite (208 tests, including every PostgreSQL 18 integration test and both 100-way races) passes against a real, local PostgreSQL 18.6 server; see [`docs/plan/M1_REPORT.md`](docs/plan/M1_REPORT.md) and [`docs/plan/M2_REPORT.md`](docs/plan/M2_REPORT.md). KA Nails is not ready for public booking until the owner supplies the facts listed there. The OCI database VM is still blocked by A1 capacity. Nothing is deployed, and there is no payment, AI, customer UI or admin service.
+KA Nails is the first planned tenant of a reusable appointment platform. **M1** supplies tenant-isolated PostgreSQL booking/catalog logic, forced RLS and transactional holds. **M2** adds OIDC identity, memberships, invitations, authorization and governed readiness/go-live. **M3** adds the customer booking journey at `/book/`: backend catalog, variants/add-ons, artist/Any Available, server-calculated times, price review, validated guest details and real booking confirmation. The Next.js static export and FastAPI API share one origin; customer requests resolve the salon through the existing Host mechanism.
+
+Evidence and limitations are recorded in [`M1_REPORT`](docs/plan/M1_REPORT.md), [`M2_REPORT`](docs/plan/M2_REPORT.md) and [`M3_REPORT`](docs/plan/M3_REPORT.md). Local M3 acceptance uses explicitly labelled FAKE live salons and real PostgreSQL/Chromium. KA Nails remains `not_live`: its timezone, hours, staff, exact durations, policies, booking rules and production domain still require confirmed owner facts. Nothing is deployed; payment collection, notifications, AI and admin interfaces remain outside M3. The existing production-start guard remains enabled.
+
+## Local customer development
+
+Build the static customer web with Node.js 24:
+
+```bash
+cd web
+npm ci --ignore-scripts
+npm run build
+```
+
+Start the existing API with a runtime-role database credential and `GBA_CUSTOMER_WEB_DIR` set to the absolute `web/out` path. Visit `/book/` using a configured salon Host. Unknown or not-live salons receive an unavailable screen. Migration 0006 adds explicit artist schedules/eligibility/blocks and booking-scoped guest contacts; migrations 0001–0005 are unchanged.
+
+See [`DEVELOPMENT`](docs/DEVELOPMENT.md) for setup, the disposable real-browser gate and exact checks. Required deposits fail closed; no payment success is simulated. The generic export bundles no tenant logo; a tenant's branding reference (for example `/assets/ka-nails-logo.png`) needs an approved asset route on its booking Host, which is not yet deployed. No KA Nails booking fact or tenant ID is hard-coded into the customer engine.
 
 ## Current state
 
-- The official KA Nails logo is preserved at `assets/brand/ka-nails-logo.png` (source SHA-256 `BB2FE1C05EB7183B8B8F55EEE861B06D80256CF5349B2958E1432FA3B83FBF53`). Do not substitute the Fresh Nails brand assets.
+- The official KA Nails logo is owned by the independent `KA-nails` repository at `public/assets/ka-nails-logo.png` (source SHA-256 `BB2FE1C05EB7183B8B8F55EEE861B06D80256CF5349B2958E1432FA3B83FBF53`). Do not substitute the Fresh Nails brand assets.
 - The full owner-supplied product brief is preserved verbatim at `source/PRODUCT_BRIEF.txt`; the handoff records later decisions and verified blockers.
 - The existing Fresh Nails website and AI receptionist are separate references. They have not been copied or modified.
-- Oracle Cloud Infrastructure is the preferred host. On 2026-09-30 the tenancy was inspected live: `gorgona-node` (E2.1.Micro, camera workload) is RUNNING and was not touched. A separate A1 database VM could not be created (`Out of host capacity` in all three ADs); see `docs/plan/M1_REPORT.md`.
+- Oracle Cloud Infrastructure is the preferred host. The M1 report records a 2026-09-30 inspection and a separate A1 database VM capacity blocker. M3 performs no infrastructure operations or current OCI verification. The separate camera instance `gorgona-node` is outside this project's deployment scope.
 - Supabase creation is deferred by owner choice because the free organization already has two active projects. Cloudflare is optional for DNS, CDN and edge security; neither provider is required in the proposed core.
-- GitHub and Cloudflare project provisioning require an authenticated session; see `docs/architecture/RELEASE_PLAN.md`.
+- The canonical origin is `alexeyalexandrov2026-tech/-GORGONA-Booking-Platform`. It is public; proprietary-code publication still requires owner approval. M3 is committed locally only. No push or hosted CI run is claimed. See `docs/architecture/RELEASE_PLAN.md` for future infrastructure gates.
 
-Start with [the handoff](CLOUD_CODE_HANDOFF.md), [full brief](source/PRODUCT_BRIEF.txt), [audit](docs/architecture/INITIAL_AUDIT.md), [target architecture](docs/architecture/TARGET_ARCHITECTURE.md), and [release plan](docs/architecture/RELEASE_PLAN.md). All architecture decisions are proposals until the relevant implementation and verification gates pass.
+For current customer work start with [M3_PLAN](docs/plan/M3_PLAN.md), [ADR-0011](docs/adr/0011_customer_booking.md) and [M3_REPORT](docs/plan/M3_REPORT.md). The [Phase 0 handoff](CLOUD_CODE_HANDOFF.md), [full brief](source/PRODUCT_BRIEF.txt), [initial audit](docs/architecture/INITIAL_AUDIT.md), [target architecture](docs/architecture/TARGET_ARCHITECTURE.md), and [release plan](docs/architecture/RELEASE_PLAN.md) preserve earlier context; later owner instructions and implemented milestone reports govern current work.
 
 ## Source material and boundaries
 

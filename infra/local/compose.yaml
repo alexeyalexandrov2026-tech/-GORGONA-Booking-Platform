@@ -1,0 +1,28 @@
+# Local PostgreSQL 18 for development and integration tests.
+# The application does not depend on Docker; any PostgreSQL 18 server works.
+#
+#   docker compose --env-file .env -f infra/local/compose.yaml up -d   (from the repository root)
+name: gorgona-booking-local
+
+services:
+  postgres:
+    image: postgres:18
+    # The 100-way concurrency test opens 100 runtime connections at once.
+    command: ["postgres", "-c", "max_connections=250"]
+    environment:
+      POSTGRES_USER: gba_superuser
+      POSTGRES_PASSWORD: ${GBA_LOCAL_SUPERUSER_PASSWORD:?copy .env.example to .env and set it}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      # PostgreSQL 18 images keep data under /var/lib/postgresql/18/docker.
+      - gba-pgdata:/var/lib/postgresql
+    healthcheck:
+      # TCP check: the init-time temporary server listens on the socket only.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U gba_superuser"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  gba-pgdata:

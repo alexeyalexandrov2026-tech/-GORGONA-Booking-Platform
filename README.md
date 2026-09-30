@@ -15,4 +15,4 @@ Start with [the handoff](CLOUD_CODE_HANDOFF.md), [full brief](source/PRODUCT_BRI
 
 ## Source material and boundaries
 
-The owner supplied a KA Nails logo and a detailed product brief. The brief references a second architecture diagram, but that image was not available as a file in this task. Any unconfirmed business data, including the location, hours, artist roster, base Hammam booking duration, deposit policy, tax treatment, and domain, remains an owner decision. No customer data or credentials belong in this repository.
+The owner supplied a KA Nails logo and a detailed product brief. The architecture diagram the brief references was supplied on 2026-09-30 and is saved at `assets/architecture/ka-nails-architecture-diagram.webp`; where it shows Supabase or Cloudflare, the later OCI-first decision in the handoff takes precedence (see `docs/plan/M1_PLAN.md`). Any unconfirmed business data, including the location, hours, artist roster, base Hammam booking duration, deposit policy, tax treatment, and domain, remains an owner decision. No customer data or credentials belong in this repository.

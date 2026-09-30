@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: api
+    env:
+      # Throwaway credentials for a CI-only container; not a secret.
+      GBA_TEST_ADMIN_DSN: postgresql://gba_superuser:ci-only-not-a-secret@127.0.0.1:55432/postgres
+      # Missing PostgreSQL must fail CI, never skip the integration tests.
+      GBA_REQUIRE_POSTGRES: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - run: uv python install 3.14
+      - run: uv sync --locked
+
+      - name: Start PostgreSQL 18
+        run: |
+          docker run -d --name gba-postgres \
+            -e POSTGRES_USER=gba_superuser \
+            -e POSTGRES_PASSWORD=ci-only-not-a-secret \
+            -p 127.0.0.1:55432:5432 \
+            postgres:18 -c max_connections=250
+          for _ in $(seq 1 60); do
+            docker exec gba-postgres pg_isready -h 127.0.0.1 -U gba_superuser && break
+            sleep 1
+          done
+          docker exec gba-postgres psql -h 127.0.0.1 -U gba_superuser -tAc "select version()"
+
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run mypy
+      - run: uv run pytest

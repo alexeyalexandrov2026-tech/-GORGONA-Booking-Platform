@@ -1,0 +1,51 @@
+[project]
+name = "gorgona-booking"
+version = "0.1.0"
+description = "GORGONA Booking AI: tenant-aware appointment platform (KA Nails is the first tenant)."
+readme = "../README.md"
+requires-python = ">=3.14,<3.15"
+license = "LicenseRef-Proprietary"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic>=2.11",
+    "psycopg[binary,pool]>=3.2.10",
+    "tzdata>=2025.2",
+    "uvicorn>=0.34",
+]
+
+[dependency-groups]
+dev = [
+    "anyio>=4.9",
+    "httpx>=0.28",
+    "mypy>=1.17",
+    "pytest>=8.4",
+    "ruff>=0.12",
+]
+
+[build-system]
+requires = ["uv_build>=0.8,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "B", "UP", "S", "ASYNC", "RUF", "PT", "SIM", "C4", "DTZ", "T20"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S608"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+markers = [
+    "postgres: requires a real PostgreSQL 18 server (set GBA_TEST_ADMIN_DSN)",
+]

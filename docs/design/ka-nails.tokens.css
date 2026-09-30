@@ -1,0 +1,51 @@
+/* Tenant skin. Load only inside the KA Nails public website and booking root. */
+[data-brand="tenant"][data-tenant="ka-nails"] {
+  --ka-canvas: #fdf8f2;
+  --ka-surface: #ffffff;
+  --ka-ink: #261b15;
+  --ka-muted: #655951;
+  --ka-rose: #b8937f;
+  --ka-action: #261b15;
+  --ka-action-ink: #ffffff;
+  --ka-line: #d9cbc1;
+  --ka-control-border: #756459;
+  --ka-focus: #76503d;
+  --ka-font-display: "Onest", ui-sans-serif, system-ui, sans-serif;
+  --ka-font-ui: "Onest", ui-sans-serif, system-ui, sans-serif;
+  --ka-space-1: 4px;
+  --ka-space-2: 8px;
+  --ka-space-3: 12px;
+  --ka-space-4: 16px;
+  --ka-space-5: 20px;
+  --ka-space-6: 24px;
+  --ka-space-8: 32px;
+  --ka-space-10: 40px;
+  --ka-space-14: 56px;
+  --ka-space-20: 80px;
+  --ka-radius-card: 10px;
+  --ka-radius-image: 15px;
+  --ka-radius-input: 30px;
+  --ka-radius-action: 999px;
+  --ka-max-content: 1280px;
+
+  /* Shared booking components consume these aliases, never GORGONA tokens. */
+  --brand-canvas: var(--ka-canvas);
+  --brand-surface: var(--ka-surface);
+  --brand-ink: var(--ka-ink);
+  --brand-muted-ink: var(--ka-muted);
+  --brand-accent: var(--ka-rose);
+  --brand-action: var(--ka-action);
+  --brand-action-ink: var(--ka-action-ink);
+  --brand-border: var(--ka-control-border);
+  --brand-focus: var(--ka-focus);
+
+  /* Semantic states match the shared component contract, not the brand accent. */
+  --status-success: #286748;
+  --status-success-ink: #ffffff;
+  --status-warning: #80520b;
+  --status-warning-ink: #ffffff;
+  --status-danger: #a33333;
+  --status-danger-ink: #ffffff;
+  --status-info: #315e80;
+  --status-info-ink: #ffffff;
+}

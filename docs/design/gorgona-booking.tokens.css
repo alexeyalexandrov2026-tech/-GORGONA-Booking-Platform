@@ -1,0 +1,52 @@
+/* Design tokens only. Scope to the platform shell; never apply to a tenant public root. */
+[data-brand="gorgona"] {
+  --gb-ink: #222f30;
+  --gb-canvas: #f7f7f5;
+  --gb-surface: #ffffff;
+  --gb-surface-muted: #e7e8e1;
+  --gb-text-muted: #4d5757;
+  --gb-line: #c9cbbe;
+  --gb-control-border: #66716e;
+  --gb-signal: #cef79e;
+  --gb-focus: #527b2a;
+  --gb-font-display: "Aspekta", "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --gb-font-ui: "Aspekta", "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --gb-font-meta: "Roboto Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  --gb-space-1: 4px;
+  --gb-space-2: 8px;
+  --gb-space-3: 12px;
+  --gb-space-4: 16px;
+  --gb-space-5: 20px;
+  --gb-space-6: 24px;
+  --gb-space-8: 32px;
+  --gb-space-10: 40px;
+  --gb-space-12: 48px;
+  --gb-space-16: 64px;
+  --gb-radius-button: 8px;
+  --gb-radius-control: 12px;
+  --gb-radius-card: 16px;
+  --gb-max-marketing: 1200px;
+
+  /* Shared, semantic component contract. Brand signal never means success. */
+  --brand-canvas: var(--gb-canvas);
+  --brand-surface: var(--gb-surface);
+  --brand-ink: var(--gb-ink);
+  --brand-muted-ink: var(--gb-text-muted);
+  --brand-accent: var(--gb-signal);
+  --brand-action: var(--gb-ink);
+  --brand-action-ink: var(--gb-surface);
+  --brand-border: var(--gb-control-border);
+  --brand-focus: var(--gb-focus);
+}
+
+/* The component must also render a status label and/or icon. */
+[data-brand="gorgona"] {
+  --status-success: #286748;
+  --status-success-ink: #ffffff;
+  --status-warning: #80520b;
+  --status-warning-ink: #ffffff;
+  --status-danger: #a33333;
+  --status-danger-ink: #ffffff;
+  --status-info: #315e80;
+  --status-info-ink: #ffffff;
+}

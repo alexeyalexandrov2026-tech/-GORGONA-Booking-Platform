@@ -14,7 +14,9 @@
 [CmdletBinding()]
 param(
     [ValidateSet('foundation', 'all')] [string] $Scope = 'foundation',
-    [switch] $Execute
+    [switch] $Execute,
+    # Non-interactive confirmation: must be exactly 'register'.
+    [string] $Confirm
 )
 $ErrorActionPreference = 'Stop'
 
@@ -47,8 +49,10 @@ if (-not $Execute) {
     return
 }
 $sub = az account show --query name -o tsv
-$typed = Read-Host "Type 'register' to register $($pending.Count) provider(s) in subscription '$sub'"
-if ($typed -ne 'register') { throw 'Confirmation did not match; nothing was changed.' }
+$typed = if ($PSBoundParameters.ContainsKey('Confirm')) { $Confirm } else {
+    Read-Host "Type 'register' to register $($pending.Count) provider(s) in subscription '$sub'"
+}
+if ($typed -cne 'register') { throw 'Confirmation did not match; nothing was changed.' }
 foreach ($ns in $pending) {
     az provider register --namespace $ns --wait
     if ($LASTEXITCODE -ne 0) { throw "registration of $ns failed" }

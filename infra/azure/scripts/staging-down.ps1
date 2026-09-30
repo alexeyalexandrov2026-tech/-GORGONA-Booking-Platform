@@ -14,6 +14,8 @@
 [CmdletBinding()]
 param(
     [switch] $Execute,
+    # Non-interactive confirmation: must equal 'gorgona-staging' exactly.
+    [string] $ConfirmName,
     [string[]] $TestResourceIds,
     [hashtable] $TestTags
 )
@@ -65,8 +67,10 @@ if ($violations.Count -gt 0) {
     throw 'REFUSED: the staging stack manages resources outside the staging boundary.'
 }
 
-$typed = Read-Host "Type '$stackName' to permanently delete staging resources"
-if ($typed -ne $stackName) { throw 'Confirmation did not match; nothing was changed.' }
+$typed = if ($PSBoundParameters.ContainsKey('ConfirmName')) { $ConfirmName } else {
+    Read-Host "Type '$stackName' to permanently delete staging resources"
+}
+if ($typed -cne $stackName) { throw 'Confirmation did not match; nothing was changed.' }
 az stack sub delete --name $stackName --action-on-unmanage deleteAll --yes
 if ($LASTEXITCODE -ne 0) { throw "stack delete failed ($LASTEXITCODE)" }
 Write-Host 'Staging stack deleted. Verify: az group exists --name rg-gorgona-staging'

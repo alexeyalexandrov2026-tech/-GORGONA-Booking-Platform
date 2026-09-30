@@ -23,7 +23,9 @@ param(
     [Parameter(Mandatory)] [ValidateSet('budgets', 'shared', 'ai', 'staging', 'production')] [string] $Stack,
     [ValidateSet('create', 'update')] [string] $Mode = 'create',
     [switch] $Preview,
-    [switch] $Execute
+    [switch] $Execute,
+    # Non-interactive confirmation: must equal the stack name (gorgona-<Stack>) exactly.
+    [string] $ConfirmName
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -65,7 +67,8 @@ function New-UrlSafePassword([int] $Length = 40) {
 $common = @('--location', 'eastus2', '--template-file', (Join-Path $root $policy.Template),
             '--parameters', (Join-Path $root "params\$paramFile"))
 $createArgs = @('stack', 'sub', 'create', '--name', $stackName) + $common + @(
-    '--action-on-unmanage', $policy.ActionOnUnmanage, '--deny-settings-mode', $policy.Deny, '--yes')
+    '--action-on-unmanage', $policy.ActionOnUnmanage, '--deny-settings-mode', $policy.Deny, '--yes',
+    '--output', 'none')
 if ($policy.Deny -ne 'none') { $createArgs += '--deny-settings-apply-to-child-scopes' }
 $previewArgs = @('deployment', 'sub', 'what-if', '--name', "$stackName-preview") + $common
 
@@ -106,10 +109,14 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "what-if failed ($LASTEXITCODE)" }
         return
     }
-    $typed = Read-Host "Type the stack name '$stackName' to $Mode it in the CURRENT subscription"
-    if ($typed -ne $stackName) { throw 'Confirmation did not match; nothing was changed.' }
+    $typed = if ($PSBoundParameters.ContainsKey('ConfirmName')) { $ConfirmName } else {
+        Read-Host "Type the stack name '$stackName' to $Mode it in the CURRENT subscription"
+    }
+    if ($typed -cne $stackName) { throw 'Confirmation did not match; nothing was changed.' }
     & $az @createArgs
     if ($LASTEXITCODE -ne 0) { throw "stack $Mode failed ($LASTEXITCODE)" }
+    # Summary without parameter values (they can include recipients) or resource IDs.
+    & $az stack sub show --name $stackName --query "{state: provisioningState, managedResources: length(resources), outputs: keys(outputs || ``{}``)}" -o json
     if ($Stack -in @('staging', 'production')) {
         Write-Host "`nNext (owner-approved) steps:"
         Write-Host " 1. Approve the Front Door private endpoint on the Container Apps environment:"

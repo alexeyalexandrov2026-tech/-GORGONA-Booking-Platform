@@ -50,22 +50,36 @@ Date: 2026-09-30 (America/New_York). Scope: checkpoints A and B of [`M4_PLAN.md`
 | Bicep CLI | 0.47.16 | `az bicep install` |
 | Docker Desktop | client 29.8.1 | winget; installer hash verified. The owner completed the first launch; the engine ran every container gate in checkpoint B |
 
-## Azure discovery
+## Azure discovery (read-only, 2026-09-30, after the owner's `az login`)
 
-**BLOCKED: AZURE AUTHENTICATION REQUIRED.** `az account show` answers "Please run 'az login'". The owner signs in; credentials are never handled by the agent.
+Only read calls were made. IDs are masked.
 
-Known from the owner's portal screenshot:
-- A free-trial subscription with **$200 credit**; the "upgrade to pay-as-you-go" option is offered.
-- Directory `alexandrov20211992gmail.onmicrosoft.com`.
-- The credit expiry date, quotas, existing resources and provider registrations are **not yet read**.
+| Item | Result |
+|---|---|
+| Subscriptions | One ("Azure subscription 1"), `Enabled`, default. Not ambiguous |
+| Offer | `FreeTrial_2014-09-01`, **spending limit On**: services are disabled rather than billed when credit is exhausted or expires |
+| Billing account | Microsoft Customer Agreement, individual, active |
+| Credit | Azure sign-up credit **$200.00, $200.00 remaining**, started 2026-09-30 14:05 UTC, **expires 2026-10-30 14:05 UTC** |
+| Existing resources | One resource group `rg-alexandrov20211992-0316` (westus3): an Azure AI Services account (S0) and one AI Services project. **Not part of GORGONA; not touched.** It is pay-per-use and can draw on the same credit |
+| Budgets | None |
+| PostgreSQL 18 in East US 2 | **Offered.** Planned SKUs available: `Standard_D2ds_v5` (General Purpose), `Standard_B1ms` (Burstable). Geo-redundant backup supported. **Zone-redundant HA: Disabled** for this subscription |
+| Resource providers | Registered: ManagedIdentity, Consumption, Resources. **Not registered:** App, Cdn, DBforPostgreSQL, KeyVault, Network, ContainerRegistry, OperationalInsights, Insights, Storage, ServiceBus, MachineLearningServices, Compute |
+| Quotas | Not readable until the providers are registered (vCPU and PostgreSQL usage returned empty) |
 
-Pending read-only commands after sign-in (IDs will be masked in the report):
-- `az account show`
-- `az group list`, `az resource list`
-- `az provider show` for Microsoft.App, Cdn, DBforPostgreSQL, KeyVault, Network, MachineLearningServices, ServiceBus
-- `az postgres flexible-server list-skus -l eastus2` (PostgreSQL 18 offer)
-- `az vm list-usage -l eastus2` plus PostgreSQL/Container Apps quota
-- `az consumption budget list`
+### Finding: Azure Front Door is not available on this Free Trial (STOP condition)
+
+- Microsoft's Front Door subscription-offers page says Standard/Premium profiles are bandwidth-throttled on free and trial subscriptions. On pay-as-you-go, throttling lasts until the first payment establishes good standing.
+- A Microsoft Q&A answer from Microsoft staff (2024) reports that creation on a free trial fails with "Free Trial & Student Account is forbidden for Azure front door resources".
+
+The production-parity staging topology (Front Door Premium -> Private Link -> Container Apps) therefore **cannot be created on this subscription as it stands**. This is the M4 stop condition "unexpected paid-resource requirement / topology unsupported". Work stopped here pending an owner decision:
+
+- **(a) Upgrade to pay-as-you-go.** Owner action in the portal; removes the spending limit, so real billing becomes possible; remaining credit still applies until 2026-10-30. Front Door may be throttled until the first payment. Full-parity staging becomes possible.
+- **(b) Reduced-scope staging on the trial.** Everything except Front Door. This proves bootstrap as the non-superuser admin, migrations 0001-0007, RLS, runtime role, container jobs, Key Vault references, managed identities, telemetry ingestion and alerts. The Front Door, WAF, Private Link and framing-through-Front-Door evidence is deferred. The production architecture is not changed, and the iframe release gate stays BLOCKED.
+- **(c) Wait.** No staging until the owner chooses (a); only the persistent shared/AI plane, if approved.
+
+### Finding: zone-redundant HA unavailable
+
+The production design uses zone-redundant PostgreSQL HA. This subscription reports it as disabled in East US 2. Production is not authorized, so nothing breaks now. Before production, re-check after any subscription upgrade, or choose same-zone HA or another region by owner decision.
 
 ## Platform facts verified in current Microsoft documentation
 
@@ -183,10 +197,11 @@ Estimates (to re-verify after sign-in):
 
 ## Remaining blockers and next steps
 
-1. **Owner sign-in** (`az login`) for read-only discovery. Stop if PostgreSQL 18 isn't offered in East US 2, or the account is ambiguous.
+1. **Owner decision on the Front Door finding** (options a/b/c under Azure discovery). Read-only discovery is done: PostgreSQL 18 is offered; the account is unambiguous.
 2. **Before any staging window:**
    - choose a staging OIDC provider (the start guard requires one; for example an Entra ID test app registration, which is itself an approval item);
    - create a GitHub OIDC federated credential and the `staging` environment with reviewers and variables (only if CI deploys are wanted; `stack-up.ps1` works without it);
+   - approve registering the required resource providers (a free subscription-level change);
    - approve the specific resource creations (budgets first).
 3. **Staging acceptance**, once approved, covers:
    - bootstrap as the non-superuser admin, then migrations 0001–0007, RLS and runtime-role checks;
@@ -194,6 +209,6 @@ Estimates (to re-verify after sign-in):
    - the load baseline with `--allow-remote`;
    - alert queries against real telemetry;
    - a rollback drill and a PITR restore drill, then teardown.
-4. **Trial credit expiry** (date unknown). Persistent resources beyond it need a pay-as-you-go upgrade (owner decision) or deletion.
+4. **Trial credit expiry: 2026-10-30 14:05 UTC.** Persistent resources beyond it need a pay-as-you-go upgrade (owner decision) or deletion.
 
 Cost estimates (re-verify after sign-in): persistent shared + AI plane ~$45–65/month idle; staging ~$17–19/day while up, $0 when torn down; production ~$615/month without HA, ~$760/month with HA.

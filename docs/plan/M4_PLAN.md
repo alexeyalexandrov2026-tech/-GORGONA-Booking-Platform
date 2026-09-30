@@ -5,7 +5,7 @@ Starting branch `m2-identity` at `b5e59cee0c82ab14e8903ebbab266c9d03844a91`, wit
 Architecture: [`AZURE_ARCHITECTURE.md`](../architecture/AZURE_ARCHITECTURE.md). Decisions: ADR-0012 (Azure hosting) and ADR-0013 (AI learning plane).
 
 Owner decisions (2026-09-30):
-- Region **East US 2**.
+- Region **Central US** (owner decision 2026-10-01; originally East US 2, where PostgreSQL Flexible Server is offer-restricted for this subscription in East US 2).
 - **Time-boxed production-parity staging**: ephemeral and IaC-controlled.
 - A **persistent AI learning plane**, independent of staging.
 - **Staging-only** relaxation of the start guard; production stays refused in code.
@@ -43,7 +43,7 @@ Owner decisions (2026-09-30):
 
 ## Resource creation plan
 
-Region: East US 2 (Front Door is global).
+Region: Central US (Front Door is global). Costs below were estimated for East US 2; Central US PostgreSQL and VM compute are about 13% higher.
 
 Classes:
 1. Persistent 24/7

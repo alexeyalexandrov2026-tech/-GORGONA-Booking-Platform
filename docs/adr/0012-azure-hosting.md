@@ -4,7 +4,7 @@
 
 ## Decision
 
-- **Azure** is the production target for GORGONA. The primary region is **East US 2** (owner decision). OCI, Supabase and Cloudflare are no longer part of the target design. The separate camera/OCI infrastructure (`gorgona-node`) is unrelated and untouched.
+- **Azure** is the production target for GORGONA. The primary region is **Central US** (owner decision 2026-10-01). It replaced East US 2, the original choice, because PostgreSQL Flexible Server is offer-restricted for this subscription in East US 2 (`OfferRestricted`; read after provider registration). Central US offers PostgreSQL 18 with both planned SKUs, zone-redundant HA, three availability zones, Front Door Private Link to Container Apps, and East US 2 as its paired region. OCI, Supabase and Cloudflare are no longer part of the target design. The separate camera/OCI infrastructure (`gorgona-node`) is unrelated and untouched.
 - **Architecture.** The architecture stays a modular monolith; M4 adds no microservices and no AKS.
   - Compute: Azure Container Apps in a workload-profiles environment, VNet-integrated, with public network access disabled.
   - The FastAPI app scales horizontally as identical replicas. Schema migrations run as a separate manual Container Apps job, never at replica start.

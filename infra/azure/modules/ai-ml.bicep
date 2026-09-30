@@ -60,7 +60,7 @@ resource mlVault 'Microsoft.KeyVault/vaults@2026-02-01' = {
 }
 
 resource workspace 'Microsoft.MachineLearningServices/workspaces@2026-05-01' = {
-  name: 'mlw-${namePrefix}'
+  name: 'mlw-${namePrefix}-${uniqueSuffix}'
   location: location
   tags: tags
   identity: { type: 'SystemAssigned' }

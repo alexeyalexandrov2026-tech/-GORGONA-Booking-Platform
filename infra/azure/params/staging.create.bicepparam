@@ -3,7 +3,7 @@
 using '../main-platform.bicep'
 
 param env = 'staging'
-param location = 'eastus2'
+param location = 'centralus'
 param uniqueSuffix = readEnvironmentVariable('GBA_UNIQUE_SUFFIX')
 param addressPrefix = '10.20.0.0/16'
 param acaSubnetPrefix = '10.20.0.0/23'

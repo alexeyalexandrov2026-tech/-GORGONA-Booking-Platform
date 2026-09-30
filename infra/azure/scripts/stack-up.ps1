@@ -64,7 +64,8 @@ function New-UrlSafePassword([int] $Length = 40) {
     } finally { $rng.Dispose() }
 }
 
-$common = @('--location', 'eastus2', '--template-file', (Join-Path $root $policy.Template),
+$region = if ($env:GBA_LOCATION) { $env:GBA_LOCATION } else { 'centralus' }
+$common = @('--location', $region, '--template-file', (Join-Path $root $policy.Template),
             '--parameters', (Join-Path $root "params\$paramFile"))
 $createArgs = @('stack', 'sub', 'create', '--name', $stackName) + $common + @(
     '--action-on-unmanage', $policy.ActionOnUnmanage, '--deny-settings-mode', $policy.Deny, '--yes',

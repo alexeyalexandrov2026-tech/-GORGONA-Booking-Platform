@@ -62,9 +62,37 @@ Only read calls were made. IDs are masked.
 | Credit | Azure sign-up credit **$200.00, $200.00 remaining**, started 2026-09-30 14:05 UTC, **expires 2026-10-30 14:05 UTC** |
 | Existing resources | One resource group `rg-alexandrov20211992-0316` (westus3): an Azure AI Services account (S0) and one AI Services project. **Not part of GORGONA; not touched.** It is pay-per-use and can draw on the same credit |
 | Budgets | None |
-| PostgreSQL 18 in East US 2 | **Offered.** Planned SKUs available: `Standard_D2ds_v5` (General Purpose), `Standard_B1ms` (Burstable). Geo-redundant backup supported. **Zone-redundant HA: Disabled** for this subscription |
+| PostgreSQL 18 in East US 2 | **CORRECTION: not available to this subscription.** The first read happened before `Microsoft.DBforPostgreSQL` was registered and returned the generic regional offer (versions 11-18). After registration, the capability API reports `OfferRestricted: Enabled`, an empty version list, and "Subscriptions are restricted from provisioning in this region". The first AI deployment failed accordingly (`ParameterOutOfRange: The value of the 'Version' should be in: []`) |
 | Resource providers | Registered: ManagedIdentity, Consumption, Resources. **Not registered:** App, Cdn, DBforPostgreSQL, KeyVault, Network, ContainerRegistry, OperationalInsights, Insights, Storage, ServiceBus, MachineLearningServices, Compute |
 | Quotas | Not readable until the providers are registered (vCPU and PostgreSQL usage returned empty) |
+
+### Deployment log (owner-approved actions, 2026-09-30 / 2026-10-01 UTC)
+
+| Step | Result |
+|---|---|
+| Budgets stack `gorgona-budgets` | **Created.** $100/month from 2026-10-01; actual 25/50/80/100% plus forecast 100%; daily cost-anomaly alert. The first attempt hit a transient `DeploymentStackTenantRegistrationFailed`; the retry succeeded |
+| Resource providers | **Registered:** App, Cdn, Network, DBforPostgreSQL, KeyVault, ContainerRegistry, OperationalInsights, Insights, Storage, ServiceBus, MachineLearningServices, plus Quota (needed for the quota request) |
+| Shared stack (East US 2) | **Created:** Log Analytics, Application Insights, ACR, delete lock. The image `gorgona-api@sha256:dc5e7986…d7a5` (commit `5e8e37f`, container gate 3/3 on that exact image) was pushed by digest |
+| AI stack (East US 2) | **Partial.** 25 resources created: VNet, DNS zones, evidence and ML storage, both Key Vaults, Service Bus, ML workspace, CPU cluster (after fixing the VM size to `Standard_D4ds_v5`) and private endpoints. **PostgreSQL failed** (offer restriction). The jobs environment was not created (quota) |
+| Staging stack (East US 2) | **Blocked at Front Door, as designed to fail fast:** `BadRequest: Free Trial and Student account is forbidden for Azure Frontdoor resources.` Only free resources exist: 2 managed identities and an unattached WAF policy |
+| Quota increase, Container Apps environments 1 → 2 (East US 2) | **Refused before evaluation:** `MFARequired: Quota requests needs Multi-Factor Authentication.` It is pending the owner's MFA sign-in |
+
+### Central US validation (read-only, 2026-10-01; owner decision to move the platform)
+
+| Check | Result |
+|---|---|
+| PostgreSQL 18 Flexible Server | Offered, `OfferRestricted: Disabled`, versions 11-18 |
+| SKUs | `Standard_B1ms` and `Standard_D2ds_v5` in zones 1-3; HA modes SameZone and ZoneRedundant |
+| PostgreSQL quota | 16 cores (B-series and DDSv4 family counters at 0/16) |
+| Azure ML `Standard_D4ds_v5` | Supported (AmlCompute). **Quota 4 vCPUs** (standardDDSv5Family), so the CPU cluster max nodes is set to 1 |
+| Container Apps | Available; workload profiles available. **ManagedEnvironmentCount limit 1** (same as East US 2) |
+| Front Door Private Link | Central US is a supported Private Link region; Azure Container Apps is a supported origin type |
+| Availability zones | 3; the paired region is East US 2 |
+| Services | App environments/jobs, PostgreSQL, Key Vault, Service Bus, Storage, ML workspaces, private endpoints, ACR, Log Analytics and App Insights are all offered |
+| Names | The new regional suffix is free for ACR, both storage accounts and all three vaults |
+| Price delta vs East US 2 | PostgreSQL D2ds_v5 $0.201/h vs $0.178/h; B1ms $0.0192/h vs $0.0170/h; ML D4ds_v5 $0.255/h vs $0.226/h; ACR, Container Apps and Log Analytics equal |
+
+Still blocked in any region on this subscription: **Front Door (Free Trial)** and a **second Container Apps environment (quota; request needs MFA)**.
 
 ### Finding: Azure Front Door is not available on this Free Trial (STOP condition)
 

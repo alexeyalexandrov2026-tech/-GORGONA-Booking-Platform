@@ -9,7 +9,7 @@ targetScope = 'subscription'
 @allowed(['staging', 'production'])
 param env string
 
-@description('Azure region (owner decision: eastus2).')
+@description('Azure region (owner decision: centralus).')
 param location string
 
 @description('Globally unique suffix for server/vault names (lowercase alphanumeric).')

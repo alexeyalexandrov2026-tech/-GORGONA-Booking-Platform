@@ -6,7 +6,7 @@
 // 3 on-demand (ML clusters at 0 nodes).
 targetScope = 'subscription'
 
-@description('Azure region (owner decision: eastus2).')
+@description('Azure region (owner decision: centralus).')
 param location string
 
 @description('Globally unique suffix (lowercase alphanumeric).')
@@ -31,6 +31,10 @@ param postgresStorageGB int = 32
 
 @description('Declare the GPU training cluster (needs GPU quota and pay-as-you-go).')
 param deployGpuCluster bool = false
+
+@description('CPU training cluster maximum nodes (bounded by the regional Azure ML vCPU quota).')
+@minValue(1)
+param cpuMaxNodes int = 2
 
 @description('Deploy the AI jobs Container Apps environment. Part of the architecture; turn off only where the regional managed-environment quota cannot hold it next to the platform environment (see params).')
 param deployJobsEnvironment bool = true
@@ -155,6 +159,7 @@ module ml 'modules/ai-ml.bicep' = {
     appInsightsId: appInsightsId
     containerRegistryId: containerRegistryId
     deployGpuCluster: deployGpuCluster
+    cpuMaxNodes: cpuMaxNodes
   }
 }
 

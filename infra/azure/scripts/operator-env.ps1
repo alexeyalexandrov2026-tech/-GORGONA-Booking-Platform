@@ -13,7 +13,12 @@
   files read them from Key Vault.
 
   Naming: GBA_UNIQUE_SUFFIX is 'g' + 5 hex characters of SHA-256("gorgona:<subscription
-  id>"), so it is stable for a subscription and does not reveal the subscription ID.
+  id>:<region>"), so it is stable per subscription and region, does not reveal the
+  subscription ID, and never collides with names still reserved in another region
+  (soft-deleted, purge-protected Key Vaults keep their names for 90 days).
+
+  Region: GBA_LOCATION, default centralus (owner decision 2026-10-01; PostgreSQL Flexible
+  Server is offer-restricted for this subscription in eastus2).
 
   Staff OIDC for staging: the tenant's public Microsoft Entra issuer and JWKS endpoints
   with the audience 'api://gorgona-staging'. No app registration is created, so no token
@@ -25,7 +30,8 @@ param(
     [ValidateSet('budgets', 'shared', 'ai', 'staging')] [string] $Stage = 'budgets',
     [int] $BudgetAmount = 100,
     [string] $BudgetStart = '2026-10-01',
-    [string] $Image
+    [string] $Image,
+    [string] $Location = 'centralus'
 )
 $ErrorActionPreference = 'Stop'
 
@@ -38,11 +44,12 @@ function Get-AzValue([string[]] $Arguments) {
 $account = Get-AzValue @('account', 'show', '-o', 'json') | Out-String | ConvertFrom-Json
 $sha = [System.Security.Cryptography.SHA256]::Create()
 try {
-    $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes("gorgona:$($account.id)"))
+    $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes("gorgona:$($account.id):$Location"))
 } finally { $sha.Dispose() }
 $suffix = 'g' + (-join ($bytes | ForEach-Object { $_.ToString('x2') })).Substring(0, 5)
 
 $set = [ordered]@{
+    GBA_LOCATION            = $Location
     GBA_SUBSCRIPTION_ID     = $account.id
     GBA_UNIQUE_SUFFIX       = $suffix
     GBA_SUBSCRIPTION_BUDGET = "$BudgetAmount"

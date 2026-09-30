@@ -5,7 +5,7 @@
 // action-on-unmanage detachAll and deny-settings denyDelete (see scripts/stack-up.ps1).
 targetScope = 'subscription'
 
-@description('Azure region (owner decision: eastus2).')
+@description('Azure region (owner decision: centralus).')
 param location string
 
 @description('Globally unique ACR name (alphanumeric).')

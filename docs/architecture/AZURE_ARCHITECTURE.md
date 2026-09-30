@@ -2,7 +2,7 @@
 
 Status: design (M4 checkpoint A, 2026-09-30). Nothing described here is provisioned. The decisions are recorded in ADR-0012 (hosting) and ADR-0013 (AI learning plane). The resource inventory and costs are in [`M4_PLAN.md`](../plan/M4_PLAN.md).
 
-Primary region: **East US 2** (owner decision). All regional components live there. Front Door is global.
+Primary region: **Central US** (owner decision 2026-10-01; East US 2 was dropped because PostgreSQL Flexible Server is offer-restricted for this subscription in East US 2). All regional components live there; the paired region is East US 2. Front Door is global.
 
 ## 1. System context
 
@@ -289,7 +289,7 @@ Staging has no role assignments outside its own resource group and does not writ
 
 ## 15. Cost model
 
-The per-resource table is in `M4_PLAN.md`. Figures are pay-as-you-go estimates for East US 2, to re-verify in the Azure pricing calculator after sign-in.
+The per-resource table is in `M4_PLAN.md`. Figures were first estimated for East US 2; Central US list prices are about 13% higher for PostgreSQL and VM compute (Retail Prices API, 2026-10-01) and equal for ACR, Container Apps and Log Analytics. Re-verify in the Azure pricing calculator after sign-in.
 
 | Scope | Idle | Active | Scale to zero? |
 |---|---|---|---|

@@ -5,10 +5,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from gorgona_booking.api import health
+from gorgona_booking.api import health, holds
 from gorgona_booking.api.errors import install_error_handlers
 from gorgona_booking.api.health import ReadinessProbe
 from gorgona_booking.api.request_id import RequestIdMiddleware
+from gorgona_booking.booking.service import BookingService
 from gorgona_booking.config import Settings, assert_environment_allowed
 from gorgona_booking.db.pool import (
     RuntimePool,
@@ -47,6 +48,9 @@ def create_app(
                 await owned.close()
                 raise
             app.state.pool = owned
+            app.state.booking_service = BookingService(
+                owned, hold_ttl_seconds=settings.hold_ttl_seconds
+            )
             if app.state.readiness_probe is None:
                 app.state.readiness_probe = pool_readiness_probe(owned)
         try:
@@ -58,6 +62,11 @@ def create_app(
     app = FastAPI(title="GORGONA Booking AI", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.pool = pool
+    app.state.booking_service = (
+        BookingService(pool, hold_ttl_seconds=settings.hold_ttl_seconds)
+        if pool is not None
+        else None
+    )
     app.state.readiness_probe = readiness_probe or (
         pool_readiness_probe(pool) if pool is not None else None
     )
@@ -65,4 +74,5 @@ def create_app(
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
     app.include_router(health.router)
+    app.include_router(holds.router)
     return app

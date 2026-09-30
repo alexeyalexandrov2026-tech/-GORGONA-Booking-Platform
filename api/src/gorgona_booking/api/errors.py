@@ -13,6 +13,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 
 from gorgona_booking.api.request_id import get_request_id
+from gorgona_booking.booking.models import (
+    HoldExpiredError,
+    IdempotencyKeyReusedError,
+    InvalidTransitionError,
+    SlotConflictError,
+)
 from gorgona_booking.errors import DatabaseUnavailableError, DomainError, NotFoundError
 
 logger = logging.getLogger("gorgona_booking.api")
@@ -22,6 +28,10 @@ DOMAIN_ERROR_STATUS: dict[type[DomainError], int] = {
     DomainError: 422,
     NotFoundError: 404,
     DatabaseUnavailableError: 503,
+    SlotConflictError: 409,
+    InvalidTransitionError: 409,
+    HoldExpiredError: 409,
+    IdempotencyKeyReusedError: 422,
 }
 
 _HTTP_STATUS_CODES: Mapping[int, str] = {

@@ -19,6 +19,7 @@ Two customers, a customer and the AI concierge, or two API instances can try to 
   - `confirm` re-checks `hold_expires_at` under a row lock, and expires the hold instead of confirming it;
   - a bounded per-tenant sweeper (`expire_due_holds`) cleans up the rest.
   So a lagging sweeper never causes a false conflict or a late confirmation.
+- **Contention management.** Two transactions inserting overlapping ranges at the same instant can each wait on the other's uncommitted index entry, and PostgreSQL breaks that cycle with `40P01 deadlock_detected` rather than `23P01`. So the service takes `pg_advisory_xact_lock` on a per-tenant, per-resource key before changing occupancy (new reservations and `HOLD → CONFIRMED`, in resource-id order). This only orders the contenders. The exclusion constraint still decides. The raw-SQL race test runs without the lock, to prove that the constraint alone never admits two reservations.
 - The repository maps `23P01` on `booking_allocations_no_overlap` to the domain error `SlotConflict`, which the API returns as HTTP 409 `SLOT_CONFLICT`.
 
 ## Consequences

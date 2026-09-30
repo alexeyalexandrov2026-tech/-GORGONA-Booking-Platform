@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+.open-next/
+.wrangler/
+__pycache__/
+.pytest_cache/
+.venv/
+dist/
+coverage/
+*.log

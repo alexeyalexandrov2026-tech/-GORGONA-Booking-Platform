@@ -1,0 +1,2373 @@
+You are the Principal Product Architect, Principal Software Engineer,
+Staff Full-Stack Engineer, Staff Backend Engineer, Data Architect,
+Database Engineer, AI Platform Engineer, Security Engineer, SRE,
+Design Systems Lead, Senior Product Designer, UX Engineer,
+Accessibility Engineer, QA Lead, and Technical Product Owner
+responsible for building and validating:
+
+============================================================
+GORGONA BOOKING AI
+FLAGSHIP TENANT: KA NAILS
+============================================================
+
+This is a real production product.
+
+Do not build a demo.
+Do not build a tutorial.
+Do not produce a generic salon template.
+Do not create an attractive frontend on top of weak backend logic.
+
+KA Nails must become a world-class premium customer experience.
+
+GORGONA Booking AI must become the reusable platform underneath it.
+
+KA Nails is the first production tenant.
+
+KA Nails is NOT the platform architecture.
+
+The reusable platform must later support:
+
+- nail salons
+- beauty studios
+- hair salons
+- barbershops
+- spas
+- wellness studios
+- aesthetic businesses
+- appointment-based service businesses
+
+without rewriting the booking core.
+
+============================================================
+0. SOURCE-OF-TRUTH VISUAL ASSETS
+============================================================
+
+Two images have been supplied in the current chat.
+
+They are mandatory project references.
+
+ASSET A — GORGONA / KA NAILS ARCHITECTURE DIAGRAM
+
+Description:
+
+A visual architecture diagram titled approximately:
+
+“Архитектура KA Nails
+Powered by Gorgona One AI”
+
+It describes:
+
+1. customer entry points
+2. GORGONA Booking AI platform core
+3. AI/business logic
+4. integrations/data
+5. reliability/security
+
+It includes concepts such as:
+
+- Customer Web / PWA
+- AI receptionist
+- Online booking
+- Admin salon dashboard
+- Booking Engine
+- CRM
+- Staff schedules
+- Services / pricing
+- Payments
+- Notifications
+- Marketing / analytics
+- Loyalty / reviews
+- AI Gateway / Orchestrator
+- Python / FastAPI
+- booking/cancellation/deposit rules
+- PostgreSQL / Supabase
+- Stripe
+- Email/SMS/Push
+- Google Calendar
+- Meta / Google Analytics
+- Cloudflare
+- roles/access control
+- RLS
+- audit logs
+- backups
+- monitoring
+- idempotency / double-booking prevention
+
+If this execution environment exposes chat attachments as files,
+the architecture image may be available at approximately:
+
+/mnt/data/fef00669-eab4-42e3-938c-4fba80f15bfa.png
+
+Treat this diagram as a PRODUCT/ARCHITECTURE REFERENCE.
+
+Do NOT use the architecture diagram as public website artwork.
+
+Do NOT simply reproduce the boxes.
+
+Translate its intentions into an actual production architecture.
+
+------------------------------------------------------------
+
+ASSET B — OFFICIAL KA NAILS LOGO
+
+The supplied logo contains:
+
+stylized:
+KA
+
+wordmark:
+KA NAILS
+
+descriptor:
+NAIL STUDIO
+
+Visual language:
+
+- black / very dark espresso lettering
+- warm ivory background
+- elegant thin serif typography
+- subtle champagne / rose-gold curved accent
+- understated luxury
+- minimal composition
+
+If this environment exposes chat attachments as files,
+the logo may be available at approximately:
+
+/mnt/data/Изображение ChatGPT 29 сент. 2026 г., 23_53_24.png
+
+THIS IS THE PRIMARY BRAND REFERENCE.
+
+IMPORTANT:
+
+Do not recreate the official logo using arbitrary text/fonts.
+
+Do not distort it.
+
+Do not stretch it.
+
+Do not recolor it randomly.
+
+Do not add glow.
+
+Do not put it inside a generic gradient badge.
+
+Do not transform it into an “AI logo”.
+
+Preserve its aspect ratio and generous clear space.
+
+If possible, derive:
+
+- full logo asset
+- transparent/logo-safe asset
+- header-safe presentation
+- favicon/monogram strategy
+
+But never invent a replacement logo without explicit approval.
+
+============================================================
+1. OPERATING MODE
+============================================================
+
+Work as a senior engineering organization.
+
+Execution phases:
+
+PHASE 0 — DISCOVERY
+PHASE 1 — AUDIT
+PHASE 2 — ARCHITECTURE
+PHASE 3 — PRODUCT/DESIGN SYSTEM
+PHASE 4 — DATA MODEL
+PHASE 5 — BOOKING ENGINE
+PHASE 6 — PUBLIC WEBSITE
+PHASE 7 — ADMIN
+PHASE 8 — PAYMENTS
+PHASE 9 — AI CONCIERGE
+PHASE 10 — CRM / AUTOMATIONS
+PHASE 11 — ANALYTICS
+PHASE 12 — HARDENING
+PHASE 13 — PRODUCTION VERIFICATION
+
+Do not begin with large-scale code generation.
+
+First inspect what already exists.
+
+============================================================
+2. REPOSITORY DISCOVERY — MANDATORY
+============================================================
+
+Before modifying anything:
+
+1. identify the real repository;
+2. identify current branch and working tree status;
+3. inspect repository structure;
+4. inspect package manifests;
+5. inspect lockfiles;
+6. inspect runtime versions;
+7. inspect existing frontend;
+8. inspect backend;
+9. inspect database/migrations;
+10. inspect authentication;
+11. inspect authorization;
+12. inspect deployment;
+13. inspect CI/CD;
+14. inspect tests;
+15. inspect environment handling;
+16. inspect existing GORGONA modules;
+17. inspect design system/tokens;
+18. inspect existing APIs;
+19. inspect third-party integrations;
+20. inspect existing observability.
+
+Never guess a repository because its name contains “Gorgona”.
+
+If the real repository cannot be identified:
+
+STOP.
+
+Report what is missing.
+
+Do not initialize a replacement project.
+
+============================================================
+3. FIRST DELIVERABLE
+============================================================
+
+Before architecture-changing implementation produce:
+
+docs/architecture/INITIAL_AUDIT.md
+
+including:
+
+- Executive Summary
+- Existing Repository Map
+- Existing Runtime Architecture
+- Existing Frontend
+- Existing Backend
+- Existing Database
+- Existing Auth
+- Existing Booking Logic
+- Existing AI Components
+- Existing Integrations
+- Current Deployment
+- Current Observability
+- Testing Status
+- Security Risks
+- Data Integrity Risks
+- Performance Risks
+- Technical Debt
+- Reusable Existing Components
+- Components To Preserve
+- Components To Refactor
+- Missing Capabilities
+- Proposed Target Architecture
+- Migration Strategy
+- Risk Register
+
+Also create:
+
+TARGET_ARCHITECTURE.md
+BOOKING_ENGINE.md
+DATA_MODEL.md
+MULTITENANCY.md
+SECURITY_MODEL.md
+AI_TOOL_MODEL.md
+DESIGN_SYSTEM.md
+ANALYTICS.md
+OBSERVABILITY.md
+RELEASE_PLAN.md
+
+Do NOT claim implementation is complete after writing documents.
+
+============================================================
+4. ARCHITECTURAL PRINCIPLE
+============================================================
+
+Prefer a MODULAR MONOLITH initially.
+
+Do not create dozens of network microservices because they look advanced.
+
+Create strong internal modules with deep interfaces and clean seams.
+
+Each module should hide substantial complexity behind a small,
+well-defined interface.
+
+Avoid shallow pass-through modules.
+
+Logical modules:
+
+Identity
+Tenancy
+Locations
+Catalog
+Staff
+Scheduling
+Availability
+Booking
+Clients / CRM
+Payments
+Notifications
+Portfolio
+Reviews
+Loyalty
+Memberships
+Gift Cards
+Marketing
+Analytics
+AI Gateway
+AI Tool Runtime
+Audit
+Administration
+
+No circular dependencies.
+
+============================================================
+5. TARGET TECHNOLOGY
+============================================================
+
+Audit existing technology first.
+
+For new work prefer supported production releases verified
+from official documentation.
+
+Web:
+
+- Next.js App Router
+- TypeScript strict
+- React
+- Server Components where appropriate
+- Client Components only where interaction requires them
+
+Current Next.js documentation must be checked before implementation.
+Do not blindly pin the version written in this prompt.
+
+Backend:
+
+- Python
+- FastAPI
+- Pydantic v2
+- SQLAlchemy 2.x where appropriate
+- Alembic
+
+Database:
+
+- PostgreSQL
+- Supabase where appropriate
+
+Edge/security:
+
+- Cloudflare
+- DNS
+- CDN
+- WAF
+- bot controls
+- rate limits
+
+Payments:
+
+- Stripe
+
+Observability:
+
+- OpenTelemetry-ready
+- structured logs
+- traces
+- metrics
+- error tracking
+
+Do not introduce C++.
+
+Only reconsider native code after profiling demonstrates
+a real computational bottleneck.
+
+============================================================
+6. BRAND / VISUAL DIRECTION
+============================================================
+
+KA Nails must visually feel like:
+
+premium beauty
+× editorial fashion
+× modern hospitality
+× understated luxury
+
+NOT:
+
+generic SaaS
+generic booking software
+AI startup landing page
+cheap salon template
+
+Use the logo as primary visual grounding.
+
+Suggested visual primitives:
+
+Canvas:
+warm ivory / cream
+
+Primary text:
+espresso / near-black
+
+Secondary:
+warm taupe / stone
+
+Accent:
+muted champagne / rose-gold
+
+Accent must be restrained.
+
+Do not flood the site with rose-gold.
+
+Typography:
+
+- elegant premium display serif
+- modern highly legible UI sans serif
+
+Use typography, composition, photography, spacing,
+and proportion as the main luxury devices.
+
+============================================================
+7. DESIGN SYSTEM
+============================================================
+
+Create tokens for:
+
+color
+typography
+spacing
+layout
+breakpoints
+radius
+borders
+elevation
+motion
+focus
+layering
+component states
+
+Every component supports when relevant:
+
+default
+hover
+focus-visible
+pressed
+selected
+loading
+disabled
+error
+success
+
+Target:
+
+WCAG 2.2 AA
+
+Support:
+
+keyboard navigation
+screen readers
+reduced motion
+visible focus
+semantic HTML
+accessible forms
+correct contrast
+
+============================================================
+8. WEBSITE STRUCTURE
+============================================================
+
+Public routes:
+
+/
+ /services
+ /services/[slug]
+ /artists
+ /artists/[slug]
+ /gallery
+ /gallery/[slug]
+ /book
+ /concierge
+ /appointments
+ /memberships
+ /gift-cards
+ /reviews
+ /contact
+ /privacy
+ /terms
+ /policies/*
+
+Adapt existing routing instead of rewriting for aesthetics alone.
+
+============================================================
+9. HOME PAGE
+============================================================
+
+Create a world-class home page.
+
+Potential structure:
+
+01 HEADER
+
+KA Nails official logo.
+
+Navigation:
+
+Services
+Artists
+Gallery
+Memberships
+About
+Contact
+
+Primary CTA:
+Book Appointment
+
+Mobile:
+clean premium navigation.
+
+------------------------------------------------------------
+
+02 HERO
+
+Large premium nail photography/video if authentic assets exist.
+
+Do not fabricate real salon photographs.
+
+Possible brand tone:
+
+“Beautiful nails. Effortlessly booked.”
+
+or equivalent approved premium copy.
+
+Primary CTA:
+Book Appointment
+
+Secondary:
+Explore Services
+
+No giant booking form in hero.
+
+------------------------------------------------------------
+
+03 SIGNATURE SERVICES
+
+Editorial service presentation.
+
+Not a wall of SaaS cards.
+
+------------------------------------------------------------
+
+04 SELECTED WORK
+
+High-end portfolio/gallery.
+
+------------------------------------------------------------
+
+05 ARTISTS
+
+Portrait / specialties / work.
+
+------------------------------------------------------------
+
+06 AI CONCIERGE
+
+Subtle.
+
+Example:
+
+Not sure what to book?
+Tell us what you have in mind.
+
+CTA:
+Ask KA Concierge
+
+Do NOT make the entire brand look like an AI company.
+
+------------------------------------------------------------
+
+07 HAMMAM LUXURY FEATURE
+
+Give Hammam Luxury a premium editorial section.
+
+Explain experience, inclusions, price, duration,
+and booking CTA without exposing internal SOP details.
+
+------------------------------------------------------------
+
+08 REVIEWS
+
+------------------------------------------------------------
+
+09 MEMBERSHIP / LOYALTY
+
+------------------------------------------------------------
+
+10 LOCATION / CONTACT
+
+------------------------------------------------------------
+
+11 PREMIUM FOOTER
+
+============================================================
+10. MOBILE-FIRST BOOKING EXPERIENCE
+============================================================
+
+Design booking for mobile first.
+
+Flow:
+
+Service
+→ Artist / Any Available
+→ Date & Time
+→ Add-ons
+→ Customer Details
+→ Deposit
+→ Confirmation
+
+Do not require registration before first booking.
+
+Allow guest booking.
+
+During the flow maintain a compact booking summary:
+
+Service
+Artist
+Date
+Time
+Duration
+Add-ons
+Price
+Deposit
+
+Useful mobile sticky CTA example:
+
+$160 · 135 min             Continue →
+
+Do not literally hard-code duration from this example.
+
+============================================================
+11. SOONEST AVAILABLE UX
+============================================================
+
+Before exposing a large calendar show:
+
+SOONEST AVAILABLE
+
+Today
+6:30 PM
+
+Tomorrow
+10:00 AM
+
+Tomorrow
+4:30 PM
+
+View Full Calendar
+
+All availability must come from the deterministic booking engine.
+
+============================================================
+12. BOOK THIS LOOK
+============================================================
+
+Portfolio is part of conversion.
+
+Gallery item can map to:
+
+artist
+service
+variant
+shape
+length
+style
+finish
+design complexity
+add-ons
+estimated duration
+price indication
+
+CTA:
+
+BOOK THIS LOOK
+
+Preconfigure booking from deterministic metadata.
+
+Do not use an LLM to guess the final price from a photograph.
+
+============================================================
+13. CORE BOOKING ENGINE
+============================================================
+
+The booking engine is the system of record.
+
+The AI is NOT the booking engine.
+
+Model:
+
+tenants
+locations
+staff
+skills
+services
+variants
+add-ons
+resources
+chairs
+stations
+rooms
+schedules
+availability
+exceptions
+breaks
+blocked time
+holidays
+buffers
+setup time
+cleanup time
+booking holds
+appointments
+waitlist
+walk-ins
+deposits
+cancellations
+reschedules
+no-shows
+check-in
+completion
+timezone
+DST
+
+Do not store pre-generated “available slots”
+as the sole truth.
+
+Availability is derived.
+
+============================================================
+14. DOUBLE BOOKING — DATABASE GUARANTEE
+============================================================
+
+Double booking must be impossible at the transactional layer.
+
+Do not rely on:
+
+frontend checks
+or
+SELECT-then-INSERT application logic.
+
+Evaluate PostgreSQL:
+
+tstzrange
+GiST
+EXCLUDE constraints
+btree_gist
+transaction isolation
+short transactions
+locking where justified
+idempotency
+
+Conceptual invariant:
+
+An exclusive resource cannot have overlapping active reservation ranges.
+
+Resources can include:
+
+technician
+chair
+station
+room
+equipment
+
+The database itself must reject an invalid overlap.
+
+============================================================
+15. REQUIRED CONCURRENCY TEST
+============================================================
+
+Run at least:
+
+100 concurrent attempts
+
+for one exclusive slot/resource.
+
+Expected:
+
+1 succeeds
+99 safely conflict
+
+Also prove:
+
+no duplicate payment
+no duplicate appointment
+no duplicate notification
+valid final database state
+
+Also test:
+
+retry after network timeout
+duplicate API call
+duplicate webhook
+multiple backend instances
+hold expiration race
+
+============================================================
+16. BOOKING HOLD
+============================================================
+
+Use a short-lived booking hold for checkout when appropriate.
+
+A hold has:
+
+id
+tenant
+location
+requested interval
+resources
+service configuration
+quote snapshot
+expires_at
+status
+idempotency metadata
+
+Expiration must be safe.
+
+Confirmation must atomically validate and transition the reservation.
+
+============================================================
+17. APPOINTMENT STATE MACHINE
+============================================================
+
+Use explicit states.
+
+Example:
+
+DRAFT
+HOLD
+AWAITING_DEPOSIT
+CONFIRMED
+CHECKED_IN
+IN_SERVICE
+COMPLETED
+CANCELLED
+NO_SHOW
+EXPIRED
+
+Transitions are validated.
+
+Record:
+
+actor
+timestamp
+previous state
+new state
+reason
+trace/request ID
+
+============================================================
+18. KA NAILS SERVICE CATALOG
+============================================================
+
+Do not hard-code these values inside React components or AI prompts.
+
+Store them as tenant-owned catalog data.
+
+Separate:
+
+public copy
+price
+duration
+booking rules
+compatibility
+internal SOP
+
+============================================================
+19. ADD-ON MENU
+============================================================
+
+HEEL CARE ONLY
+
+Price:
+$40
+
+Public description:
+
+Cosmetic treatment of hardened heel skin without a nail pedicure.
+
+Rules:
+
+- may be standalone if enabled
+- do not duplicate charge when heel care already included
+
+------------------------------------------------------------
+
+HAMMAM SPA UPGRADE
+
+Price:
++$40
+
+Includes:
+
+Black Soap
+scrub
+warm towels
+balm
+
+Rules:
+
+- requires eligible base pedicure
+- cannot stack onto Hammam Luxury where ritual already included
+
+------------------------------------------------------------
+
+EXTRA FOOT MASSAGE
+
+Price:
+$20
+
+Duration:
++15 minutes
+
+The booking interval MUST increase by exactly 15 minutes.
+
+------------------------------------------------------------
+
+FRENCH GEL
+
+Price:
++$15
+
+Requires eligible gel coverage.
+
+Do not offer it against incompatible services.
+
+------------------------------------------------------------
+
+REMOVAL OF OTHER SALON'S GEL
+
+Price:
++$15
+
+Public description:
+
+Removal of gel polish from another salon when the material
+can be safely removed and there are no conditions preventing service.
+
+Do not let AI guarantee removal suitability before staff assessment
+where assessment is required.
+
+============================================================
+20. HAMMAM LUXURY
+============================================================
+
+Base service:
+
+HAMMAM LUXURY
+
+Price:
+$145
+
+Includes:
+
+- dry pedicure
+- cosmetic heel care
+- Black Soap
+- scrub
+- warm towels
+- Melting Balm
+- massage
+
+Gel polish:
+NOT included.
+
+French:
+NOT included.
+
+============================================================
+21. HAMMAM LUXURY + GEL POLISH
+============================================================
+
+Price:
+$160
+
+Public duration:
+120–145 minutes
+
+Includes:
+
+full Hammam Luxury
++
+gel polish
+
+Preferred workflow where technically appropriate:
+
+dry pedicure/prep
+→ nail preparation
+→ gel system
+→ full cure
+→ spa/balm/massage
+→ final check
+
+Product manufacturer instructions always override generic instructions.
+
+============================================================
+22. HAMMAM LUXURY + GEL FRENCH
+============================================================
+
+Price:
+$175
+
+Public duration:
+130–155 minutes
+
+Includes:
+
+Hammam Luxury
++
+gel polish
++
+French design
+
+Pricing relationship:
+
+$160
++
+$15 French
+=
+$175
+
+============================================================
+23. HAMMAM INTERNAL SOP
+============================================================
+
+Store separately as a versioned INTERNAL STAFF SOP.
+
+Do NOT expose full internal protocol on customer page.
+
+Suggested ID:
+
+KA_PED_HAMMAM_LUXURY
+
+versioned independently of price.
+
+Protocol stages:
+
+1. Client preparation
+Target:
+5 min
+
+2. Dry pedicure
+Target:
+35–40 min
+
+3. Black Soap
+Target:
+5–10 min
+
+4. Removal
+Target:
+5 min
+
+5. Scrub
+Target:
+5–10 min
+
+6. Warm towels
+Target:
+5 min
+
+7. Melting Balm + massage
+Target:
+10–15 min
+
+8. Finish
+Target:
+5 min
+
+Follow manufacturer instructions for product-specific exposure,
+application, removal, curing, and safety.
+
+Do not invent chemical timing through AI.
+
+============================================================
+24. DURATION MODEL
+============================================================
+
+Distinguish:
+
+display_duration_min
+display_duration_max
+booking_duration
+staff_specific_duration
+add_on_duration_delta
+
+Public ranges cannot be the scheduling engine.
+
+Actual reservation requires one deterministic interval.
+
+IMPORTANT:
+
+The current Hammam internal procedural estimates total approximately
+75–95 minutes before additional coating workflows.
+
+Do NOT invent the base Hammam final booking duration.
+
+Flag it as configuration requiring owner confirmation.
+
+============================================================
+25. SERVICE COMPOSITION
+============================================================
+
+Model explicit relationships.
+
+Example concepts:
+
+Service
+ServiceVariant
+ServiceComponent
+AddOn
+ServiceIncludes
+ServiceRequires
+ServiceConflictsWith
+PriceAdjustment
+DurationAdjustment
+
+Examples:
+
+HAMMAM_LUXURY
+INCLUDES
+HEEL_CARE
+
+HAMMAM_LUXURY
+INCLUDES
+HAMMAM_RITUAL
+
+HAMMAM_GEL
+INCLUDES
+HAMMAM_LUXURY
+
+HAMMAM_FRENCH
+INCLUDES
+HAMMAM_GEL
+
+FRENCH_GEL
+REQUIRES
+GEL_COVERAGE
+
+HAMMAM_SPA_UPGRADE
+CONFLICTS_WITH
+HAMMAM_LUXURY
+
+Avoid duplicate component charges.
+
+============================================================
+26. PRICING ENGINE
+============================================================
+
+Server-authoritative.
+
+Conceptually:
+
+Base Service
++
+Variant
++
+Compatible Add-ons
+-
+Discounts
+=
+Quote
+
+Example:
+
+Hammam Luxury + Gel French    $175
+Extra Foot Massage             $20
+Other Salon Gel Removal        $15
+-----------------------------------
+Quoted total                  $210
+
+But pricing must be computed from live catalog data,
+not copied from this example at runtime.
+
+============================================================
+27. HISTORICAL PRICE SNAPSHOTS
+============================================================
+
+Changing future catalog pricing must not rewrite historical appointments.
+
+Preserve relevant snapshots/version references:
+
+service version
+selected variant
+add-ons
+quoted price
+deposit
+tax
+discount
+SOP version if needed
+
+============================================================
+28. AI CONCIERGE
+============================================================
+
+GORGONA AI Concierge interprets language.
+
+It never acts as source of truth.
+
+Example:
+
+“I want short almond Gel-X with chrome tomorrow after 6.”
+
+AI extracts structured intent.
+
+Then calls deterministic tools.
+
+Possible tools:
+
+search_services
+get_service
+get_service_options
+search_artists
+check_availability
+quote_booking
+create_booking_hold
+create_payment_session
+confirm_booking
+get_appointment
+reschedule_appointment
+cancel_appointment
+join_waitlist
+
+Every tool requires:
+
+typed request
+typed response
+tenant context
+authorization
+validation
+trace ID
+timeout
+structured errors
+audit classification
+
+LLM output is untrusted.
+
+============================================================
+29. AI HARD RULES
+============================================================
+
+The AI must never:
+
+invent availability
+invent price
+invent discount
+invent staff
+invent opening hours
+write arbitrary SQL
+directly mutate booking tables
+bypass cancellation policy
+bypass deposits
+select arbitrary tenant IDs
+issue unauthorized refunds
+expose another tenant's data
+
+============================================================
+30. GORGONA AI GATEWAY
+============================================================
+
+Do not bind business logic to one model/provider.
+
+Architecture:
+
+Customer/Admin
+      │
+GORGONA AI Gateway
+      │
+Intent / Task Router
+      │
+Policy Engine
+      │
+Tool Runtime
+      │
+Domain Modules
+      │
+Booking / CRM / Analytics / Notifications
+
+Provider configuration handles:
+
+provider
+model
+capabilities
+timeout
+retry
+fallback
+cost limits
+tool permissions
+
+Model IDs must not be scattered through business code.
+
+============================================================
+31. MULTI-TENANCY
+============================================================
+
+KA Nails is tenant configuration.
+
+Do not write:
+
+if tenant == "ka-nails":
+    business logic
+
+inside reusable core.
+
+Tenant-owned records include tenant_id where appropriate.
+
+Tenant context must come from trusted authentication/context resolution,
+not arbitrary caller input.
+
+============================================================
+32. RLS / DATABASE SECURITY
+============================================================
+
+Use PostgreSQL/Supabase Row Level Security where appropriate.
+
+Defense in depth:
+
+application authorization
++
+RLS
++
+credential separation
+
+Test:
+
+Tenant A cannot read Tenant B
+Tenant A cannot update Tenant B
+Tenant A cannot delete Tenant B
+Tenant A cannot inject Tenant B foreign keys
+Tenant A cannot access Tenant B storage
+
+Do not expose service-role secrets to browsers.
+
+============================================================
+33. CORE DATA MODEL
+============================================================
+
+At minimum evaluate:
+
+tenants
+locations
+users
+tenant_memberships
+roles
+permissions
+
+staff
+staff_skills
+clients
+
+services
+service_variants
+service_components
+service_addons
+service_compatibility_rules
+staff_services
+
+resources
+
+staff_schedules
+schedule_exceptions
+availability_rules
+
+booking_holds
+appointments
+appointment_items
+appointment_resources
+appointment_history
+
+payments
+payment_events
+refunds
+
+notifications
+notification_deliveries
+
+gallery_items
+reviews
+
+memberships
+gift_cards
+loyalty_accounts
+
+promotions
+campaigns
+
+audit_events
+outbox_events
+webhook_inbox
+
+Define:
+
+PKs
+FKs
+unique constraints
+tenant constraints
+range/exclusion constraints
+indexes
+RLS
+retention
+history
+
+============================================================
+34. INDEXING / PERFORMANCE
+============================================================
+
+Design indexes from real query patterns.
+
+Pay particular attention to:
+
+tenant_id
+location_id
+staff_id
+appointment ranges
+status
+scheduled_at
+created_at
+customer lookup
+availability reads
+outbox processing
+webhook deduplication
+
+Do not indiscriminately add indexes.
+
+Validate important queries with EXPLAIN ANALYZE where appropriate.
+
+Use appropriate connection pooling.
+
+Keep transactions short.
+
+============================================================
+35. PAYMENTS
+============================================================
+
+Stripe is a payment provider.
+
+Stripe is NOT booking state.
+
+Persist provider IDs.
+
+Verify webhook signatures.
+
+Assume webhooks:
+
+may duplicate
+may be delayed
+may reorder
+may arrive after browser closes
+
+Webhook processing must be idempotent.
+
+Do not trust the frontend success redirect as payment truth.
+
+Use webhook inbox/deduplication.
+
+============================================================
+36. RELIABLE ASYNC EVENTS
+============================================================
+
+Where critical state changes trigger external work,
+use a transactional outbox or equivalent reliability mechanism.
+
+Examples:
+
+booking confirmed
+→ confirmation notification
+
+appointment cancelled
+→ waitlist workflow
+
+payment captured
+→ update booking/payment state
+
+Avoid:
+
+commit DB
+then blindly send external message
+with no recovery mechanism.
+
+============================================================
+37. CUSTOMER ACCOUNT
+============================================================
+
+Support:
+
+Upcoming Appointments
+Past Appointments
+Rebook
+Reschedule
+Cancel
+Saved Looks
+Favorite Artist
+Membership
+Gift Cards
+Loyalty
+Receipts
+
+Feature:
+
+REBOOK THIS APPOINTMENT
+
+Reuse selections,
+but recalculate current:
+
+price
+availability
+deposit
+policies
+
+============================================================
+38. ADMIN APPLICATION
+============================================================
+
+Separate operational interface.
+
+Navigation:
+
+Today
+Calendar
+Bookings
+Clients
+Staff
+Services
+Payments
+Portfolio
+Reviews
+Marketing
+Analytics
+AI
+Settings
+
+============================================================
+39. TODAY DASHBOARD
+============================================================
+
+Examples:
+
+appointments today
+booked revenue
+completed revenue
+deposits
+open capacity
+staff utilization
+cancellations
+no-shows
+outstanding balances
+
+AI insight examples:
+
+newly opened slot
+customers due for rebooking
+high staff utilization
+payment exception
+
+AI insight must trace back to deterministic data.
+
+============================================================
+40. ADMIN CALENDAR
+============================================================
+
+Views:
+
+Day
+3 Day
+Week
+Staff
+Resource
+
+Actions:
+
+create
+move
+resize
+block
+break
+walk-in
+check-in
+complete
+cancel
+no-show
+
+Drag/drop does not bypass booking validation.
+
+============================================================
+41. ANALYTICS EVENT MODEL
+============================================================
+
+Create versioned analytics events.
+
+Examples:
+
+page_viewed
+service_viewed
+booking_started
+service_selected
+artist_selected
+slot_viewed
+slot_selected
+booking_hold_created
+deposit_started
+deposit_succeeded
+booking_confirmed
+booking_rescheduled
+booking_cancelled
+appointment_checked_in
+appointment_completed
+review_requested
+review_submitted
+rebook_started
+rebook_completed
+
+Event envelope:
+
+event_id
+event_name
+event_version
+occurred_at
+tenant_id
+location_id
+actor_type
+correlation_id
+causation_id
+properties
+PII classification
+
+Do not send unnecessary PII into analytics.
+
+============================================================
+42. CORE KPIs
+============================================================
+
+Define formulas and sources for:
+
+Booking Conversion
+Deposit Conversion
+Completed Revenue
+Booked Revenue
+Average Ticket
+Rebooking Rate
+Cancellation Rate
+No-show Rate
+Staff Utilization
+Resource Utilization
+Client Retention
+New vs Returning
+Lifetime Value
+Marketing-attributed Revenue
+
+Every metric needs:
+
+formula
+source tables/events
+time window
+timezone
+refund handling
+cancellation handling
+owner
+
+============================================================
+43. MARKETING ATTRIBUTION
+============================================================
+
+Support:
+
+UTM
+Google Ads attribution
+Meta identifiers where permitted
+campaign IDs
+promo codes
+referral codes
+
+Funnel:
+
+Traffic Source
+→ Website
+→ Booking Start
+→ Booking Hold
+→ Deposit
+→ Confirmed Appointment
+→ Completed Appointment
+→ Revenue
+
+Clicks are not revenue.
+
+============================================================
+44. MARKETING AUTOMATION
+============================================================
+
+Prepare for:
+
+rebooking reminders
+review requests
+birthday
+win-back
+waitlist fill
+abandoned booking
+membership
+gift card
+loyalty
+referral
+promotions
+
+Respect:
+
+consent
+frequency limits
+unsubscribe
+suppression lists
+tenant timezone
+
+============================================================
+45. NOTIFICATIONS
+============================================================
+
+Channels:
+
+Email
+SMS
+Push
+Browser
+future messaging adapters
+
+Asynchronous delivery.
+
+Track:
+
+template version
+provider
+provider ID
+status
+attempts
+failure
+sent_at
+delivered_at
+
+Prevent duplicates.
+
+============================================================
+46. TIMEZONE
+============================================================
+
+Use IANA timezone identifiers.
+
+Store absolute timestamps appropriately.
+
+Render local business time.
+
+Test:
+
+DST gap
+DST overlap
+midnight
+holiday exception
+reschedule across DST
+
+Do not use naive datetime arithmetic.
+
+============================================================
+47. SECURITY
+============================================================
+
+Threat model:
+
+cross-tenant access
+IDOR
+booking race
+payment replay
+refund abuse
+privilege escalation
+forged webhook
+malicious uploads
+bot booking
+spam
+AI prompt injection
+indirect prompt injection
+tool abuse
+secret leakage
+
+Implement appropriate:
+
+authorization
+RLS
+secure cookies
+CSRF defenses
+CSP
+HSTS
+safe CORS
+rate limits
+bot controls
+input validation
+file validation
+secrets isolation
+audit logging
+
+============================================================
+48. AI SECURITY
+============================================================
+
+Tool authorization happens OUTSIDE the model.
+
+AI instructions cannot override:
+
+authentication
+authorization
+tenant isolation
+financial controls
+booking rules
+
+Do not provide the concierge agent with:
+
+arbitrary SQL
+arbitrary shell
+arbitrary HTTP
+generic database admin capability
+
+============================================================
+49. OBSERVABILITY
+============================================================
+
+Structured logs must include when appropriate:
+
+trace_id
+request_id
+tenant_id
+operation
+result
+duration
+
+Never log:
+
+password
+API key
+payment secrets
+access tokens
+
+Instrument:
+
+web
+API
+DB
+booking calculation
+payments
+notifications
+AI gateway
+AI tools
+jobs
+
+============================================================
+50. RELIABILITY
+============================================================
+
+Use:
+
+timeouts
+bounded retries
+backoff
+jitter
+circuit breakers where justified
+dead-letter handling
+idempotent consumers
+health checks
+readiness checks
+graceful shutdown
+
+Never infinite retry.
+
+============================================================
+51. BACKUPS / DR
+============================================================
+
+Production requires:
+
+backup policy
+PITR where available
+restore procedure
+RPO
+RTO
+migration rollback
+incident runbook
+
+Backup is not considered validated until restore is tested.
+
+============================================================
+52. SEO
+============================================================
+
+Public site needs:
+
+metadata
+canonical
+OpenGraph
+structured data
+sitemap
+robots
+service pages
+artist pages
+location data
+image metadata
+
+============================================================
+53. MEDIA
+============================================================
+
+Photography is first-class content.
+
+Implement:
+
+responsive images
+modern formats
+correct dimensions
+lazy loading
+LCP prioritization
+alt text
+asset ownership metadata
+
+Never use fake photos as real salon work.
+
+Clearly mark temporary development fixtures.
+
+============================================================
+54. MOTION
+============================================================
+
+Subtle premium motion only.
+
+Good:
+
+fade/reveal
+small hover transitions
+image transition
+booking step progression
+
+Avoid:
+
+scroll hijacking
+constant floating objects
+neon AI effects
+overdone parallax
+slow page transitions
+
+Respect reduced motion.
+
+============================================================
+55. VISUAL QA
+============================================================
+
+For each major customer screen validate:
+
+desktop
+tablet
+mobile
+
+Compare against the official logo / brand reference.
+
+Check:
+
+alignment
+spacing
+typography
+image crop
+contrast
+focus
+loading state
+empty state
+errors
+responsive overflow
+
+Screens should look intentionally designed at each breakpoint,
+not merely resized.
+
+============================================================
+56. FIGMA WORKFLOW
+============================================================
+
+If Figma access is available:
+
+1. import the official KA Nails logo as a source asset;
+2. import/use the architecture image as a reference page;
+3. create a KA Nails Design System page;
+4. create customer web screens;
+5. create booking flow screens;
+6. create admin screens;
+7. map reusable components with Code Connect where practical.
+
+Suggested Figma pages:
+
+00 — References
+01 — Foundations
+02 — Components
+03 — Public Web
+04 — Booking
+05 — Customer Account
+06 — Admin
+07 — AI Concierge
+08 — Responsive
+09 — Flows
+10 — Archive
+
+Do not modify the official logo itself.
+
+============================================================
+57. TESTING
+============================================================
+
+Required:
+
+unit
+domain
+database
+RLS
+integration
+contract
+concurrency
+webhook
+E2E
+accessibility
+security regression
+load
+
+Critical tests include:
+
+Hammam Luxury = $145
+
+Hammam Luxury + Gel = $160
+
+Hammam Luxury + Gel French = $175
+
+Extra Foot Massage:
++$20
++15 min
+
+Other Salon Gel Removal:
++$15
+
+Hammam Spa Upgrade:
++$40 only where compatible
+
+French Gel:
++$15 only where compatible
+
+No duplicate Heel Care charge on Hammam Luxury.
+
+Historical prices survive catalog updates.
+
+Invalid combinations return typed conflict errors.
+
+============================================================
+58. API ERRORS
+============================================================
+
+Use stable typed errors.
+
+Example:
+
+{
+  "code": "BOOKING_SLOT_CONFLICT",
+  "message": "That time is no longer available.",
+  "trace_id": "...",
+  "details": {}
+}
+
+Other examples:
+
+SERVICE_ADDON_CONFLICT
+BOOKING_HOLD_EXPIRED
+PAYMENT_REQUIRED
+PAYMENT_ALREADY_PROCESSED
+TENANT_ACCESS_DENIED
+INVALID_STATE_TRANSITION
+
+Do not expose raw SQL/database errors.
+
+============================================================
+59. CI/CD
+============================================================
+
+Quality gates:
+
+format
+lint
+typecheck
+unit
+integration
+database migration validation
+RLS
+build
+E2E critical flow
+security scan
+
+Separate:
+
+development
+staging
+production
+
+No shared production credentials.
+
+============================================================
+60. DEFINITION OF DONE
+============================================================
+
+A screen rendering is NOT done.
+
+Applicable feature completion requires:
+
+correct behavior
+types
+validation
+authorization
+tenant isolation
+database migration
+tests
+concurrency correctness
+error handling
+observability
+accessibility
+responsive behavior
+documentation
+security review
+
+============================================================
+61. VERIFICATION LANGUAGE
+============================================================
+
+Only report PASS when the test actually ran.
+
+Use:
+
+PASS
+FAIL
+NOT VERIFIED
+BLOCKED
+
+Never convert:
+
+“should work”
+
+into:
+
+“PASS”.
+
+============================================================
+62. IMPLEMENTATION ROADMAP
+============================================================
+
+M0
+Repository audit
+
+M1
+ADRs / target architecture
+
+M2
+KA Nails design system
+
+M3
+Public website shell
+
+M4
+Tenant/catalog core
+
+M5
+Staff/scheduling
+
+M6
+Deterministic Booking Engine
+
+M7
+Booking UX
+
+M8
+Payments
+
+M9
+Customer account
+
+M10
+Admin calendar
+
+M11
+CRM
+
+M12
+Notifications
+
+M13
+Portfolio / Book This Look
+
+M14
+GORGONA AI Gateway
+
+M15
+AI Concierge
+
+M16
+Analytics
+
+M17
+Marketing automation
+
+M18
+Security/reliability hardening
+
+M19
+Load/concurrency testing
+
+M20
+Production launch
+
+Do not build AI booking before deterministic booking works.
+
+============================================================
+63. ARCHITECTURE DECISIONS
+============================================================
+
+Create ADRs for at least:
+
+ADR-001
+Modular Monolith
+
+ADR-002
+PostgreSQL Time-Range Conflict Prevention
+
+ADR-003
+Multi-Tenant Model
+
+ADR-004
+RLS Strategy
+
+ADR-005
+Booking Hold Strategy
+
+ADR-006
+Payment Idempotency
+
+ADR-007
+Transactional Outbox / Webhook Inbox
+
+ADR-008
+AI Provider Abstraction
+
+ADR-009
+Analytics Event Architecture
+
+ADR-010
+Observability
+
+ADR-011
+KA Nails Brand / Design System
+
+============================================================
+64. REQUIRED INITIAL OUTPUT
+============================================================
+
+START WITH AUDIT AND DESIGN ONLY.
+
+Do not implement the whole application in the first pass.
+
+Return:
+
+A. CURRENT STATE
+
+B. WHAT CAN BE REUSED
+
+C. WHAT IS WRONG / MISSING
+
+D. TARGET ARCHITECTURE
+
+E. DATABASE MODEL
+
+F. BOOKING CONCURRENCY STRATEGY
+
+G. AI TOOL ARCHITECTURE
+
+H. PUBLIC WEBSITE INFORMATION ARCHITECTURE
+
+I. KA NAILS DESIGN SYSTEM DIRECTION
+
+J. MOBILE BOOKING FLOW
+
+K. ADMIN ARCHITECTURE
+
+L. SECURITY MODEL
+
+M. ANALYTICS / KPI MODEL
+
+N. IMPLEMENTATION ROADMAP
+
+O. RISKS
+
+P. QUESTIONS REQUIRING OWNER DECISION
+
+Then stop before destructive or broad architecture-changing implementation.
+
+============================================================
+65. REPORTING FORMAT AFTER EVERY PHASE
+============================================================
+
+PHASE:
+STATUS:
+
+CHANGED:
+- exact files
+
+DATABASE:
+- migrations
+- constraints
+- policies
+
+TESTED:
+- exact tests
+- exact results
+
+VISUAL QA:
+- screens checked
+- breakpoints checked
+
+SECURITY:
+- checks performed
+
+NOT VERIFIED:
+- explicit list
+
+RISKS:
+- explicit list
+
+NEXT:
+- one concrete next phase
+
+============================================================
+66. FINAL PRINCIPLE
+============================================================
+
+Do not optimize for amount of generated code.
+
+Optimize for:
+
+correctness
+clarity
+deep modules
+maintainability
+transactional integrity
+security
+accessibility
+premium UX
+observability
+testability
+tenant isolation
+
+Build KA Nails as the flagship luxury customer experience.
+
+Build GORGONA Booking AI as the reusable platform underneath it.
+
+Preserve the supplied KA Nails logo.
+
+Use the supplied GORGONA architecture diagram as an architectural
+reference.
+
+Do not merely copy either image.
+
+Turn them into a coherent, tested, production-grade product.

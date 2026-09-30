@@ -13,6 +13,9 @@ dependencies = [
     "uvicorn>=0.34",
 ]
 
+[project.scripts]
+gba-db = "gorgona_booking.db.cli:main"
+
 [dependency-groups]
 dev = [
     "anyio>=4.9",
@@ -36,6 +39,8 @@ select = ["E", "W", "F", "I", "N", "B", "UP", "S", "ASYNC", "RUF", "PT", "SIM", 
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106", "S608"]
+# The CLI reports to the operator on stdout.
+"src/gorgona_booking/db/cli.py" = ["T201"]
 
 [tool.mypy]
 python_version = "3.14"

@@ -32,8 +32,8 @@ These are binding for M1 and recorded as ADRs in `docs/adr/`.
 
 ```
 api/                      Python 3.14 project (uv)
-  migrations/NNNN_*.sql   explicit, ordered, checksummed SQL migrations
   src/gorgona_booking/    application package
+    db/migrations/        explicit, ordered, checksummed SQL migrations (shipped in the package)
     api/                  FastAPI app, routes, error envelope
     catalog/              quote engine (pure) + repository
     booking/              hold/booking service, idempotency, repository

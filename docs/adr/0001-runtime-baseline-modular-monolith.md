@@ -13,7 +13,7 @@ GORGONA Booking AI needs a transactional booking core first; the AI concierge, n
 - Python **3.14**, **FastAPI**, **Pydantic v2** for API contracts, frozen dataclasses for domain values.
 - **PostgreSQL 18** for local development, tests and CI. Drop to 17 only if a verified OCI deployment constraint requires it.
 - **Psycopg 3** with async connections and `psycopg_pool.AsyncConnectionPool`.
-- **Explicit SQL migrations** (`api/migrations/NNNN_name.sql`), applied in order, each in its own transaction, recorded with a SHA-256 checksum so edited history is detected. No ORM unless a demonstrated benefit appears.
+- **Explicit SQL migrations** (`api/src/gorgona_booking/db/migrations/NNNN_name.sql`, shipped inside the package), applied in order, each in its own transaction, recorded with a SHA-256 checksum so edited history is detected. No ORM unless a demonstrated benefit appears.
 - `mypy --strict`, `ruff` lint and format, `pytest` with the `anyio` plugin.
 
 ## Consequences

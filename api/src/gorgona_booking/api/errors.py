@@ -32,6 +32,7 @@ from gorgona_booking.errors import (
     InvalidReferenceError,
     NotFoundError,
 )
+from gorgona_booking.identity import invitations as inv
 from gorgona_booking.tenancy.authorization import (
     PermissionDeniedError,
     TenantAccessDeniedError,
@@ -59,6 +60,16 @@ DOMAIN_ERROR_STATUS: dict[type[DomainError], int] = {
     TenantAccessDeniedError: 403,
     TenantSuspendedError: 403,
     PermissionDeniedError: 403,
+    inv.EmailNotVerifiedError: 403,
+    inv.InvitationEmailMismatchError: 403,
+    inv.InvitationNotFoundError: 404,
+    inv.InvitationAlreadyUsedError: 409,
+    inv.InvitationNotUsableError: 409,
+    inv.InvitationPendingError: 409,
+    inv.AlreadyMemberError: 409,
+    inv.CannotModifySelfError: 409,
+    inv.LastOwnerError: 409,
+    inv.MembershipRevokedError: 409,
 }
 
 _HTTP_STATUS_CODES: Mapping[int, str] = {

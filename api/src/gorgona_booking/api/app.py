@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from gorgona_booking.api import health, holds, platform, salons
+from gorgona_booking.api import health, holds, members, platform, salons
 from gorgona_booking.api.errors import install_error_handlers
 from gorgona_booking.api.health import ReadinessProbe
 from gorgona_booking.api.request_id import RequestIdMiddleware
@@ -79,6 +79,7 @@ def create_app(
     app.include_router(health.router)
     app.include_router(holds.router)
     app.include_router(salons.router)
+    app.include_router(members.router)
     app.include_router(platform.router)
     return app
 

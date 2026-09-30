@@ -53,13 +53,23 @@ async def authorized_tenant(
     permission: Permission,
     *,
     request_id: str | None = None,
+    exclusive: str | None = None,
 ) -> AsyncIterator[TenantAccess]:
     """Yield a connection scoped to `salon_id` only if `principal` may use `permission`.
 
     Any failure raises before the caller runs and rolls the transaction back, so the
     candidate tenant context never outlives the check.
+
+    `exclusive` names a per-salon critical section (e.g. "members"). Its advisory
+    lock is taken *before* the membership row lock, so two requests that change each
+    other's memberships queue instead of deadlocking.
     """
     async with pool.connection() as conn, conn.transaction():
+        if exclusive is not None:
+            await conn.execute(
+                "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(%s, 0))",
+                (f"gba:{exclusive}:{salon_id}",),
+            )
         await set_tenant_context(conn, salon_id)
         await set_user_context(conn, principal.user_id, request_id=request_id)
         yield await _authorize(conn, principal, salon_id, permission)

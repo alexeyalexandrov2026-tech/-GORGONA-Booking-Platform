@@ -131,6 +131,7 @@ commit → CI (ruff, mypy, pytest+PG+Chromium, web checks, separation/secret che
        → canary 10% → observe → 100% ; previous revision kept for rollback
 ```
 
+- Implemented as dormant workflows: `.github/workflows/deploy-staging.yml` (manual, `staging` environment approval, OIDC, digest-pinned scanner, migrate -> revision -> Front Door smoke -> automatic traffic rollback) and `promote-production.yml` (refuses: production is not authorized). CI (`ci.yml`) builds and runs the production image on every push.
 - Rollback means shifting traffic back to the previous revision; images are immutable by digest.
 - Migrations are forward-only and additive. A failed migration stops the pipeline before any revision changes.
 
@@ -178,24 +179,24 @@ Background work: the hold-expiry sweeper exists in code, but correctness never d
 
 ## 10. Observability
 
-- **Implementation (checkpoint B).** OpenTelemetry SDK with the Azure Monitor OpenTelemetry exporter (GA), configured by `APPLICATIONINSIGHTS_CONNECTION_STRING`. Exporting is disabled when that variable is unset (local and tests). The Container Apps managed OpenTelemetry agent is preview-only and is not used.
+- **Implementation (checkpoint B).** OpenTelemetry SDK with the Azure Monitor OpenTelemetry exporter (GA), configured by `APPLICATIONINSIGHTS_CONNECTION_STRING`. Exporting is disabled when that variable is unset (local and tests). Application Insights has local (key) auth disabled, so the exporter authenticates with the API's managed identity (`AZURE_CLIENT_ID`), which holds Monitoring Metrics Publisher on the component. Each environment reports as `gorgona-api-<env>`. The Container Apps managed OpenTelemetry agent is preview-only and is not used.
 - **Signals.** HTTP request rate, latency (p50/p95/p99) and errors; database pool waits/timeouts and readiness failures; revision restarts.
 - **Domain counters.** Mapped once from the central error-code table (`api/errors.py`): `SLOT_CONFLICT`, `HOLD_EXPIRED`, `IDEMPOTENCY_KEY_REUSED`, `TENANT_NOT_FOUND`, `PAYMENT_REQUIRED`, confirmation failures and `DATABASE_UNAVAILABLE`.
 - **Structured JSON logs** carry `request_id` (`X-Request-ID`), trace ID, `tenant_id` (UUID, not a name), operation, status and duration. Never passwords, tokens, DSNs, JWTs, customer names, emails or phone numbers.
-- **Alerts.** Each alert has an owner (platform operator) and an action. Thresholds are initial and re-tuned from the staging baseline.
+- **Alerts** (`infra/azure/modules/alerts.bicep`). Each alert has an owner (the platform operator, via the environment's action group) and an action. Thresholds are initial and are re-tuned from the staging load baseline (`api/tools/load_baseline.py`). Metric names are taken from the Azure Monitor supported-metrics reference.
 
 | Alert | Signal | Threshold | Severity | Action |
 |---|---|---|---|---|
-| API unavailable | Front Door origin health or `/health/ready` failures | 3 consecutive probe failures | Sev 1 | Check revision health; roll back the revision |
-| Error-rate spike | 5xx share of requests | > 2% for 5 min | Sev 2 | Inspect traces; roll back if release-related |
-| Database unavailable | Readiness `database: failed`, PostgreSQL availability metric | Any for 2 min | Sev 1 | Check server/HA state; follow the failover/restore runbook |
-| Storage near full | PostgreSQL storage percent | > 80% | Sev 3 | Confirm autogrow; review growth |
-| Pool saturation | PostgreSQL active connections vs max; pool wait time | > 80% for 10 min | Sev 2 | Lower replicas or pool size; evaluate PgBouncer |
-| Sustained latency | p95 API latency | > 1.5 s for 10 min | Sev 3 | Check DB CPU and slow queries |
-| Failed revision | Revision provisioning/health state | Any failed | Sev 2 | Keep traffic on the previous revision |
-| Confirmation failures | Confirm 5xx or unexpected 4xx rate | > 5 in 10 min | Sev 2 | Investigate; not normal customer error |
-| Tenant-resolution anomaly | `TENANT_NOT_FOUND` + FDID rejections | > 10× the 7-day baseline | Sev 3 | Check for scans/misrouting; WAF rule review |
-| Budget | Cost vs budget | 50% / 80% / 100% | Info / Sev 3 / Sev 2 | Tear down staging; review spend |
+| API unavailable | Front Door `OriginHealthPercentage` (probes `/health/ready`) | Average < 50% over 5 min | Sev 1 | Check revision health; roll back the revision |
+| Error-rate spike | Front Door `Percentage5XX` | > 2% over 5 min | Sev 2 | Inspect traces; roll back if release-related |
+| Database unavailable | PostgreSQL `is_db_alive` | Average < 0.6 over 5 min (down about 2 of 5 min) | Sev 1 | Check server/HA state; follow the failover/restore runbook |
+| Storage near full | PostgreSQL `storage_percent` | > 80% over 15 min | Sev 3 | Confirm autogrow; review growth |
+| Pool saturation | PostgreSQL `active_connections` | Minimum above the connection budget (`maxReplicas x pool + 16`) for 15 min | Sev 2 | Lower replicas or pool size; evaluate PgBouncer |
+| Replica restarts (failed revision) | Container Apps `RestartCount` (cumulative per replica) | Maximum > 3 over 15 min | Sev 2 | Keep traffic on the previous revision; inspect logs |
+| Sustained latency | App Insights `requests` p95 for `gorgona-api-<env>` | > 1.5 s over 10 min | Sev 3 | Check DB CPU and slow queries |
+| Confirmation failures | App Insights `requests` ending `/confirm` with 5xx | > 5 in 10 min | Sev 2 | Investigate; not normal customer error |
+| Tenant-resolution anomaly | `gorgona.domain_errors` with code `TENANT_NOT_FOUND` (unknown hosts and Front Door ID refusals) | Last hour > 10x the hourly average of the previous 47 h, floor 50 | Sev 3 | Check for scans/misrouting; WAF rule review |
+| Budget | Consumption budget (staging, shared, AI) | 50% / 80% / 100% actual, 100% forecast | Info / Sev 3 / Sev 2 | Tear down staging; review spend |
 
 ## 11. Failure modes and disaster recovery
 

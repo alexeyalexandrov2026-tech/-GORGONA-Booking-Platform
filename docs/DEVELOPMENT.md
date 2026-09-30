@@ -33,6 +33,38 @@ For a live test fixture, location timezone/hours, artist hours, artist/service e
 
 Tenant assets are owned by the independent site repository, not bundled as a platform default. KA-nails verifies the supplied logo bytes with SHA-256 in its acceptance suite. A published logo reference can use `/assets/ka-nails-logo.png`; an optional palette reference can use a validated `#RRGGBB` accent. Branding references are supplied explicitly and never selected by a hard-coded tenant ID.
 
+## Deployment readiness (M4)
+
+**Embedding allowlist.** The customer web may be framed only by origins the owner approves per tenant (migration 0007, audited, FORCE RLS). Every HTML response carries `Content-Security-Policy: frame-ancestors 'self' <approved>`; API responses carry `frame-ancestors 'none'`. With no approved origin, `X-Frame-Options: SAMEORIGIN` is added too. Plain `http://` origins are accepted only for loopback, and only in `local`/`test`/`ci`.
+
+```bash
+cd api
+uv run --env-file ../.env gba-db embed-origin list <tenant-slug>
+uv run --env-file ../.env gba-db embed-origin add <tenant-slug> https://www.example.test
+uv run --env-file ../.env gba-db embed-origin revoke <tenant-slug> https://www.example.test
+```
+
+**Behind Azure Front Door.** Set `GBA_TRUSTED_PROXY=azure_front_door` and `GBA_FRONT_DOOR_ID=<profile frontDoorId>`. Every request except `/health/live` and `/health/ready` must then carry exactly one matching `X-Azure-FDID`. The tenant host is taken from `X-Forwarded-Host`; anything else is a 404 `TENANT_NOT_FOUND`. The default (`none`) ignores forwarded headers. `GBA_ENV=staging` starts only with a configured OIDC provider and this Front Door mode; `production` always refuses to start.
+
+**Observability.** Logs are JSON lines with an allowlist of fields, never customer data. Telemetry is exported to Application Insights only when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set; in Azure the exporter authenticates with the managed identity in `AZURE_CLIENT_ID`.
+
+Opt-in gates (each fails, never skips, once enabled):
+
+| Gate | Enable | Proves |
+|---|---|---|
+| Container | `GBA_REQUIRE_CONTAINER=1`, `GBA_CONTAINER_IMAGE=<tag>` (build: `docker build -t gorgona-api:local .` at the repo root) | The production image runs bootstrap/migrate jobs, is non-root with no baked secrets, serves health, `/book/` and a real booking, and exits cleanly within the grace period |
+| Tenant site | `GBA_REQUIRE_TENANT_SITE=1`, `GBA_TENANT_SITE_DIR=<KA-nails checkout>` (build `web/` first) | An independent site embeds the real wizard through public configuration only; confirmed rows and tenant isolation are verified |
+
+Load baseline (public customer API only; creates bookings only for a tenant named `FAKE ...`; non-loopback targets need `--allow-remote`):
+
+```bash
+cd api
+uv run python tools/load_baseline.py --base-url http://127.0.0.1:8000 \
+  --host <fake-salon-host> --day <YYYY-MM-DD> --out load-report.json
+```
+
+It reports throughput, p50/p95/p99 and status/error codes per operation, and a contention check where exactly one concurrent hold may win. It exits 1 on any 5xx, a transport error, or a contention violation.
+
 ## Checks (no database needed)
 
 ```bash

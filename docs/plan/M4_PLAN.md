@@ -87,7 +87,9 @@ Costs are pay-as-you-go estimates, to re-verify in the pricing calculator after 
 
 **Trial credit plan.** Create budgets (#0) first, then shared + AI plane. Then one staging window of ≤5 days (~$90), after which staging is torn down immediately. The credit expires after 30 days whatever the balance. Persistent resources then need a pay-as-you-go upgrade (an owner decision) or deletion.
 
-## Checkpoint B detail (for confirmation)
+## Checkpoint B detail
+
+**Status: implemented locally, 2026-09-30.** Evidence, commits and deviations are in [`M4_REPORT.md`](M4_REPORT.md). Staging acceptance scripts are replaced by the dormant `deploy-staging` workflow plus the load-baseline tool; the full acceptance list is in the report's next steps.
 
 1. **Trusted Front Door host mode.** Settings `GBA_TRUSTED_PROXY` and `GBA_FRONT_DOOR_ID`, plus an ASGI middleware. Tests as in AZURE_ARCHITECTURE §4.
 2. **Framing allowlist.**

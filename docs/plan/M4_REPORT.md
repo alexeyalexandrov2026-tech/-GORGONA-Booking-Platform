@@ -1,16 +1,21 @@
-# M4 report: Azure cloud foundation, checkpoint A
+# M4 report: Azure cloud foundation, checkpoints A and B
 
-Date: 2026-09-30 (America/New_York). Scope: checkpoint A of [`M4_PLAN.md`](M4_PLAN.md). That covers design, IaC (authored and validated locally), tooling, read-only discovery and the M3 baseline rerun. **No Azure resource was created, changed, previewed or deployed.**
+Date: 2026-09-30 (America/New_York). Scope: checkpoints A and B of [`M4_PLAN.md`](M4_PLAN.md).
+
+- **Checkpoint A:** design, IaC authored and validated locally, tooling, read-only discovery and the M3 baseline rerun.
+- **Checkpoint B:** local application, container, observability, IaC and pipeline changes, plus KA decoupling.
+
+**No Azure resource was created, changed, previewed or deployed. Nothing was pushed.**
 
 ## Gates
 
 | Gate | Status | Why |
 |---|---|---|
-| **M3 APPLICATION BASELINE** | **PASS** | The full local baseline was rerun at the M4 start (see Validation) |
-| **M4 AZURE FOUNDATION GATE** | **FAIL** | Checkpoint B (trusted-proxy host mode, framing allowlist, start guard, container, observability, KA decoupling) and checkpoint C (Azure evidence) are not done |
+| **M3 APPLICATION BASELINE** | **PASS** | Rerun at the M4 start, and every M3 behaviour is still covered by the current full suite (see Validation) |
+| **M4 AZURE FOUNDATION GATE** | **FAIL (pending Azure evidence)** | Checkpoint B is complete locally. The gate needs checkpoint C: read-only discovery (blocked on sign-in), approved resource creation and a staging window |
 | **AZURE STAGING ACCEPTANCE** | **NOT DEPLOYED** | No staging window has been approved |
-| **PRODUCTION IFRAME RELEASE GATE** | **BLOCKED** | The M3 clickjacking finding is still open. The fix is designed (ADR-0012, AZURE_ARCHITECTURE §4–5) but not implemented. No KA production origin is approved |
-| **PRODUCTION DEPLOYMENT** | **NOT AUTHORIZED** | |
+| **PRODUCTION IFRAME RELEASE GATE** | **BLOCKED** | The M3 clickjacking finding is **fixed in code**: a governed per-tenant `frame-ancestors` allowlist, with the unapproved origin blocked and the approved origin allowed in real Chromium. The gate still needs staging evidence through Front Door, and an owner-approved KA production origin (none is approved) |
+| **PRODUCTION DEPLOYMENT** | **NOT AUTHORIZED** | Refused in code at process start and by the `promote-production` workflow |
 | **KA NAILS GO-LIVE** | **NOT AUTHORIZED** | KA remains `not_live`; business facts are unconfirmed |
 
 ## Owner decisions recorded
@@ -28,19 +33,14 @@ Date: 2026-09-30 (America/New_York). Scope: checkpoint A of [`M4_PLAN.md`](M4_PL
 |---|---|---|
 | Path | `C:\Users\alexa\Documents\Codex\2026-09-30\also-create-new-project-in-a-2\outputs\gorgona-booking-ai` | `C:\Users\alexa\Documents\Codex\2026-09-30\referenced-chatgpt-conversation-this-is-an\work\ka-nails-public` |
 | Branch / start HEAD | `m2-identity` @ `b5e59ce` (clean) | `main` @ `f131b0b` (clean) |
-| Commits in checkpoint A | `2736772` (docs), `fc283f4` (infra), plus the commit adding this report | none (unchanged) |
-| Remote | `main` = `784312d` "Initial commit"; **UNRELATED HISTORIES**; re-queried read-only | empty; re-queried read-only |
+| Checkpoint A commits | `2736772` docs, `fc283f4` infra, `9b13e9f` report | none |
+| Checkpoint B commits | `99c6e7d`, `9d81f51`, `49fba22`, `325cf00`, `37a930b`, `c9605ad`, `e661cdf`, `f16323e`, `861de38`, plus the commit adding this report | `4df7455` |
+| Remote | `main` = `784312d` "Initial commit"; **UNRELATED HISTORIES**; not synchronized | empty |
 | Push | **Not performed** | **Not performed** |
 
-Files added:
-- **Docs:** ADR-0012, ADR-0013, `AZURE_ARCHITECTURE.md`, `M4_PLAN.md`, `M4_REPORT.md`.
-- **IaC:** `infra/azure/`, 32 files:
-  - `bicepconfig.json` and `README.md`;
-  - 3 entry points;
-  - 17 modules;
-  - 7 parameter files;
-  - 2 scripts.
-- No application code changed.
+- Checkpoint A added the docs (ADR-0012, ADR-0013, `AZURE_ARCHITECTURE.md`, `M4_PLAN.md`, this report) and `infra/azure/` (32 files).
+- Checkpoint B changed application code, one additive migration (`0007`), the container, IaC modules, workflows and docs, as listed below.
+- Migrations 0001–0006 are unchanged; the 0006 SHA-256 is still `cd315f8f…6eb9576`.
 
 ## Tooling (installed with owner approval)
 
@@ -48,7 +48,7 @@ Files added:
 |---|---|---|
 | Azure CLI | 2.90.0 | winget; installer hash verified |
 | Bicep CLI | 0.47.16 | `az bicep install` |
-| Docker Desktop | client 29.8.1 | winget; installer hash verified. **The engine is not running.** First launch needs the owner to accept Docker's subscription agreement, and possibly a WSL2 setup or reboot. |
+| Docker Desktop | client 29.8.1 | winget; installer hash verified. The owner completed the first launch; the engine ran every container gate in checkpoint B |
 
 ## Azure discovery
 
@@ -110,7 +110,28 @@ Design details worth recording:
 - **Evidence storage** is StorageV2 blob without hierarchical namespace, because blob versioning is unavailable with it. The container immutability policy is left **unlocked**; locking is irreversible and an owner decision.
 - **Azure ML** gets its own system storage and Key Vault, holding metadata only. A managed-VNet workspace is required before sensitive training data flows (scale later).
 
-## Validation: M3 application baseline (rerun, current trees)
+## Checkpoint B: what changed
+
+| Slice | Commit | Change | Evidence |
+|---|---|---|---|
+| Trusted Front Door host boundary | `99c6e7d` | `GBA_TRUSTED_PROXY=azure_front_door` + `GBA_FRONT_DOOR_ID`. The tenant host comes from `X-Forwarded-Host` only when exactly one `X-Azure-FDID` matches (constant-time compare). Only `/health/live` and `/health/ready` are exempt; everything else is a 404 `TENANT_NOT_FOUND` | 22 tests: spoofed forwarded host, missing/wrong/duplicate FDID, malformed host, tenant A vs B, default mode ignores forwarded headers, redirect keeps the tenant host |
+| Framing allowlist (**closes the M3 finding in code**) | `9d81f51` | Migration `0007_tenant_embed_origins` (FORCE RLS, audited, origin CHECK). `gba-db embed-origin add\|revoke\|list`. HTML responses carry `frame-ancestors 'self' <approved>`, adding `X-Frame-Options: SAMEORIGIN` when none are approved; API responses carry `'none'`; failures fall back to `'self'` | 18 tests, including RLS isolation and audit. The M3 gap scenario is inverted: real Chromium **blocks** an unapproved loopback embedder and **allows** the approved one; top-level navigation still works |
+| Start guard | `49fba22` | `staging` starts only with an OIDC provider **and** Front Door mode with a profile ID; `production` is always refused | Unit tests name the missing condition |
+| Production container | `325cf00` | Multi-stage Dockerfile: digest-pinned Node 24, Python 3.14 and uv bases; `uv sync --locked --no-dev`; non-root uid 10001; one image for the API and the `gba-db` jobs; 25 s graceful shutdown | Real-image gate on disposable `postgres:18`: bootstrap job; migrate job twice (second is a no-op); no baked secrets; health/ready; `/book/` CSP; a real booking to CONFIRMED; JSON logs without IDs or email; clean exit in < 25 s. Image 295 MB |
+| Observability | `37a930b`, `e661cdf` | JSON logs with allowlisted fields; one access line per request by route template (probes skipped); `gorgona.domain_errors` counter by code and route; OpenTelemetry to Application Insights when configured, **Entra-authenticated** through the API managed identity (local auth is disabled on the component); per-environment service name | Unit tests: no PII or DSN in logs, exception messages dropped, route templates instead of raw paths, counters recorded, credential selection |
+| KA decoupling | `c9605ad`, KA `4df7455` | KA no longer imports platform pytest internals or touches PostgreSQL. Its suite reads only `KA_BOOKING_TEST_URL`, `KA_BOOKING_TEST_DAY` and `KA_SITE_PORT`. The platform harness seeds FAKE tenants, approves the loopback origin, runs the site's own `npm` commands and verifies rows | Harness: the KA site's own **10** Chromium scenarios pass; 2 CONFIRMED rows; tenant B untouched; the site is rebuilt without a booking URL afterwards |
+| Alerts as IaC | `e661cdf` | `alerts.bicep`: action group, 6 metric alerts, 3 log alerts (AZURE_ARCHITECTURE section 10). `appinsights-publisher.bicep` role grant | Metric names checked against the Azure Monitor supported-metrics reference; GA API versions; lint 0 |
+| Load baseline | `f16323e` | `api/tools/load_baseline.py`: read, contention and hold+confirm phases; p50/p95/p99, throughput, error codes; FAKE-tenant and remote-target guards | Real run against the API and PostgreSQL: 6 concurrent holds on one slot gave **exactly 1 winner and 5 clean 409 `SLOT_CONFLICT`**; 0 failures; confirmed rows match the report |
+| Pipelines | `861de38` | `ci.yml` builds the image and runs the container gate. `deploy-staging.yml` is dormant (manual; environment approval; OIDC; digest-pinned scanner; open-window flag; migrate, revision, Front Door smoke, automatic rollback). `promote-production.yml` refuses | YAML parses (3/3); `bash -n` on all 19 `run:` blocks is clean. **actionlint not run** (not installed; a download would need approval). **Never executed on GitHub** (no push) |
+
+Design corrections made during checkpoint B:
+- **Telemetry authentication.** Checkpoint A set `DisableLocalAuth` on Application Insights but configured only a connection string. That combination would have had telemetry rejected in Azure. It is fixed with a managed-identity credential and a role grant.
+- **Alert thresholds.** Thresholds were aligned to what the platform can evaluate:
+  - metric windows use allowed values, so "10 min" became 15 min;
+  - the connection alert uses the design connection budget, not an unverified SKU `max_connections`;
+  - the tenant anomaly compares against the previous 47 h (a log-alert query range limit) instead of 7 days.
+
+## Validation: M3 application baseline (rerun at the M4 start)
 
 | Working directory | Command | Result |
 |---|---|---|
@@ -124,6 +145,21 @@ Design details worth recording:
 
 Nested browser scenarios are never added to pytest totals.
 
+## Validation: checkpoint B final (current trees, 2026-09-30)
+
+| Working directory | Command | Result |
+|---|---|---|
+| platform `api/` | `uv run ruff format --check .` / `ruff check .` / `mypy` | PASS / PASS / PASS (102 files) |
+| repo root | `docker build -t gorgona-api:local .` | PASS, 295 MB |
+| platform `api/` | `GBA_REQUIRE_POSTGRES=1 GBA_REQUIRE_BROWSER=1 GBA_REQUIRE_CONTAINER=1 GBA_CONTAINER_IMAGE=gorgona-api:local GBA_REQUIRE_TENANT_SITE=1 GBA_TENANT_SITE_DIR=<KA> uv run --env-file <private> pytest -q -s -rs` | **PASS: 291 passed, 0 skipped.** Nested: **16** platform Chromium scenarios; **10** KA-site Chromium scenarios. No leftover smoke containers or networks |
+| platform `web/` | `typecheck`, `lint`, `format:check`, `build` | PASS |
+| KA root | `typecheck`, `lint`, `format:check`, `build` (unconfigured) | PASS |
+| KA root | `npm run test:e2e` (unconfigured) | 6 passed; 6 integration-only scenarios skipped by design (they need `KA_BOOKING_TEST_URL`, supplied by the platform harness) |
+| `infra/azure/` | `bicep lint` on the 3 entry points; `bicep build-params` on all 7 parameter files (dummy non-secret values) | 0 findings; 7/7 compile (Bicep 0.47.16) |
+| both repos | Secret scan of every commit | Clean. The only GUID added is the public built-in role ID for Monitoring Metrics Publisher |
+
+Pytest totals: 232 at M4 start → 254 → 272 → 276 → 279 → 286 → 287 → 291.
+
 ## Azure resources
 
 - **Created:** none.
@@ -136,22 +172,28 @@ Estimates (to re-verify after sign-in):
 
 ## Security posture (design)
 
-- **Unchanged:** Host-resolved tenancy (the trusted-proxy extension is designed, not coded), RLS and runtime-role guard, idempotency, concurrency.
+- **Unchanged:** RLS and runtime-role guard, idempotency, concurrency. Host-resolved tenancy now has the tested Front Door trusted-proxy mode.
 - **Planned protections:**
   - no public database or Key Vault;
   - no origin bypass (Private Link + FDID);
   - WAF in Prevention mode with managed and rate-limit rules;
   - managed identities with least-privilege secret grants;
-  - no Azure secrets in GitHub (OIDC federation, dormant workflows in checkpoint B).
-- **Open:** the clickjacking finding (M3) stays open until checkpoint B implements and tests the governed `frame-ancestors` allowlist, followed by staging evidence.
+  - no Azure secrets in GitHub (OIDC federation; the workflows exist and are dormant).
+- **Clickjacking (M3 finding):** fixed in code and proven in local Chromium. Release still needs staging evidence through Front Door, and an approved KA production origin.
 
 ## Remaining blockers and next steps
 
-1. **Owner sign-in** (`az login`) for read-only discovery. Stop if PostgreSQL 18 isn't offered in East US 2 or the account is ambiguous.
-2. **Docker Desktop first launch** and agreement acceptance by the owner (needed for the checkpoint B container build).
-3. **Owner confirmation of the checkpoint A architecture**, which starts checkpoint B.
-4. **Before any staging window:**
+1. **Owner sign-in** (`az login`) for read-only discovery. Stop if PostgreSQL 18 isn't offered in East US 2, or the account is ambiguous.
+2. **Before any staging window:**
    - choose a staging OIDC provider (the start guard requires one; for example an Entra ID test app registration, which is itself an approval item);
-   - produce an image digest;
-   - approve the specific resource creations.
-5. **Trial credit expiry** (date unknown). Persistent resources beyond it need a pay-as-you-go upgrade (owner decision) or deletion.
+   - create a GitHub OIDC federated credential and the `staging` environment with reviewers and variables (only if CI deploys are wanted; `stack-up.ps1` works without it);
+   - approve the specific resource creations (budgets first).
+3. **Staging acceptance**, once approved, covers:
+   - bootstrap as the non-superuser admin, then migrations 0001–0007, RLS and runtime-role checks;
+   - the Front Door trusted-proxy path and framing through Front Door;
+   - the load baseline with `--allow-remote`;
+   - alert queries against real telemetry;
+   - a rollback drill and a PITR restore drill, then teardown.
+4. **Trial credit expiry** (date unknown). Persistent resources beyond it need a pay-as-you-go upgrade (owner decision) or deletion.
+
+Cost estimates (re-verify after sign-in): persistent shared + AI plane ~$45–65/month idle; staging ~$17–19/day while up, $0 when torn down; production ~$615/month without HA, ~$760/month with HA.

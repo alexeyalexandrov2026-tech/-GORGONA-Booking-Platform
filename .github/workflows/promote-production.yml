@@ -1,0 +1,26 @@
+# Production promotion: NOT AUTHORIZED. This workflow exists so the release path is
+# reviewable, and it refuses to run. Production also refuses at process start
+# (config.assert_environment_allowed). Enabling it requires: staging acceptance evidence,
+# an owner decision recorded in docs/plan, a "production" GitHub environment with required
+# reviewers, and a change to this file that replaces the refusal with the gated steps below.
+#
+# Intended gated steps (not implemented until authorized):
+#   1. promote the staging-accepted image digest (no rebuild);
+#   2. run the production migrate job; stop on failure;
+#   3. new revision at 0% traffic, labelled canary; smoke through Front Door;
+#   4. canary 10% -> observe alerts -> 100%; keep the previous revision for rollback.
+name: promote-production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refuse:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "::error::Production deployment is not authorized."
+          exit 1

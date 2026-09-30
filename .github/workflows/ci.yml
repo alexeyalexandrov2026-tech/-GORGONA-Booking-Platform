@@ -24,6 +24,9 @@ jobs:
       # Missing PostgreSQL must fail CI, never skip the integration tests.
       GBA_REQUIRE_POSTGRES: "1"
       GBA_REQUIRE_BROWSER: "1"
+      # The production image is built and run for real (jobs, API, booking, shutdown).
+      GBA_REQUIRE_CONTAINER: "1"
+      GBA_CONTAINER_IMAGE: gorgona-api:ci
     steps:
       - uses: actions/checkout@v5
 
@@ -62,6 +65,10 @@ jobs:
             sleep 1
           done
           docker exec gba-postgres psql -h 127.0.0.1 -U gba_superuser -tAc "select version()"
+
+      - name: Build the production image
+        working-directory: .
+        run: docker build --pull -t gorgona-api:ci .
 
       - run: uv run ruff format --check .
       - run: uv run ruff check .

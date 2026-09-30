@@ -1,0 +1,157 @@
+# Build, scan, push and deploy one commit to the time-boxed Azure staging window.
+#
+# DORMANT until the owner configures the "staging" GitHub environment:
+#   - required reviewers (every run waits for an approval),
+#   - variables AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID (OIDC federation to a
+#     deployment identity scoped to rg-gorgona-staging + AcrPush on the shared registry;
+#     no Azure secret is stored in GitHub), GBA_ACR_NAME, GBA_STAGING_SMOKE_HOST,
+#     TRIVY_IMAGE (pinned by digest),
+#   - GBA_STAGING_WINDOW_OPEN=true only while an approved staging window exists.
+# Manual trigger only. Infrastructure is created by infra/azure/scripts/stack-up.ps1, never here.
+name: deploy-staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type deploy-staging to confirm
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  RG: rg-gorgona-staging
+  APP: ca-gorgona-staging-api
+  MIGRATE_JOB: caj-gorgona-staging-migrate
+
+jobs:
+  build:
+    if: github.event.inputs.confirm == 'deploy-staging'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - name: Preflight (dormant unless configured)
+        env:
+          WINDOW: ${{ vars.GBA_STAGING_WINDOW_OPEN }}
+          TRIVY_IMAGE: ${{ vars.TRIVY_IMAGE }}
+          CLIENT: ${{ vars.AZURE_CLIENT_ID }}
+          TENANT: ${{ vars.AZURE_TENANT_ID }}
+          SUBSCRIPTION: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ACR: ${{ vars.GBA_ACR_NAME }}
+        run: |
+          [ "$WINDOW" = "true" ] || { echo "::error::No approved staging window (GBA_STAGING_WINDOW_OPEN)"; exit 1; }
+          case "$TRIVY_IMAGE" in *@sha256:*) ;; *) echo "::error::TRIVY_IMAGE must be pinned by digest"; exit 1;; esac
+          for v in CLIENT TENANT SUBSCRIPTION ACR; do
+            [ -n "${!v}" ] || { echo "::error::missing environment variable for $v"; exit 1; }
+          done
+
+      - uses: actions/checkout@v5
+
+      - name: Build the image
+        run: docker build --pull -t "gorgona-api:${GITHUB_SHA}" .
+
+      - name: Scan the image (fail on fixable HIGH/CRITICAL)
+        env:
+          TRIVY_IMAGE: ${{ vars.TRIVY_IMAGE }}
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
+            image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL \
+            --scanners vuln,secret "gorgona-api:${GITHUB_SHA}"
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Push by digest
+        id: push
+        env:
+          ACR: ${{ vars.GBA_ACR_NAME }}
+        run: |
+          az acr login --name "$ACR"
+          server="$(az acr show --name "$ACR" --query loginServer -o tsv)"
+          docker tag "gorgona-api:${GITHUB_SHA}" "$server/gorgona-api:${GITHUB_SHA}"
+          docker push "$server/gorgona-api:${GITHUB_SHA}"
+          digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$server/gorgona-api:${GITHUB_SHA}")"
+          echo "image=$digest" >> "$GITHUB_OUTPUT"
+          echo "Pushed $digest" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE: ${{ needs.build.outputs.image }}
+      SMOKE_HOST: ${{ vars.GBA_STAGING_SMOKE_HOST }}
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Migrate (single job execution; a failure stops the release)
+        run: |
+          az containerapp job update -n "$MIGRATE_JOB" -g "$RG" --image "$IMAGE" -o none
+          execution="$(az containerapp job start -n "$MIGRATE_JOB" -g "$RG" --query name -o tsv)"
+          for _ in $(seq 1 90); do
+            status="$(az containerapp job execution show -n "$MIGRATE_JOB" -g "$RG" \
+              --job-execution-name "$execution" --query properties.status -o tsv)"
+            case "$status" in
+              Succeeded) echo "migration $execution succeeded"; exit 0;;
+              Failed|Stopped|Degraded) echo "::error::migration $execution $status"; exit 1;;
+            esac
+            sleep 10
+          done
+          echo "::error::migration $execution timed out"; exit 1
+
+      - name: Record the serving revision (rollback target)
+        id: previous
+        run: |
+          previous="$(az containerapp revision list -n "$APP" -g "$RG" \
+            --query "[?properties.trafficWeight > \`0\`].name | [0]" -o tsv)"
+          echo "revision=$previous" >> "$GITHUB_OUTPUT"
+
+      - name: New revision
+        run: |
+          suffix="g${GITHUB_SHA::8}"
+          az containerapp update -n "$APP" -g "$RG" --image "$IMAGE" --revision-suffix "$suffix" -o none
+          for _ in $(seq 1 60); do
+            health="$(az containerapp revision show -n "$APP" -g "$RG" --revision "$APP--$suffix" \
+              --query properties.healthState -o tsv)"
+            [ "$health" = "Healthy" ] && exit 0
+            sleep 10
+          done
+          echo "::error::revision $APP--$suffix not healthy"; exit 1
+
+      - name: Smoke through Front Door
+        id: smoke
+        run: |
+          curl -fsS --retry 5 --retry-all-errors "https://$SMOKE_HOST/health/ready"
+          headers="$(curl -fsS -D - -o /dev/null "https://$SMOKE_HOST/book/")"
+          echo "$headers" | grep -i "^content-security-policy: frame-ancestors 'self'"
+          echo "$headers" | grep -i "^strict-transport-security:"
+
+      - name: Roll back traffic on failure
+        if: failure() && steps.previous.outputs.revision != ''
+        env:
+          PREVIOUS: ${{ steps.previous.outputs.revision }}
+        run: |
+          az containerapp ingress traffic set -n "$APP" -g "$RG" --revision-weight "$PREVIOUS=100" -o none
+          echo "Rolled back traffic to $PREVIOUS" >> "$GITHUB_STEP_SUMMARY"

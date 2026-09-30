@@ -34,6 +34,8 @@ param acrName string
 param acrLoginServer string
 param logAnalyticsWorkspaceId string
 param appInsightsConnectionString string
+@description('Shared Application Insights component name (main-shared: appi-gorgona-shared).')
+param appInsightsName string = 'appi-gorgona-shared'
 
 @description('OIDC provider for staff APIs (public values). Required by the staging start guard.')
 param authIssuer string
@@ -54,7 +56,7 @@ param minReplicas int
 param maxReplicas int
 param dbPoolMaxSize int
 
-@description('Environment budget (staging) amount and recipients.')
+@description('Environment budget (staging) amount and operator recipients (budget and alerts).')
 param budgetAmount int = 100
 param budgetStartDate string
 param budgetContactEmails array
@@ -190,6 +192,12 @@ module jobsPull 'modules/acr-pull.bicep' = {
   params: { registryName: acrName, principalId: identities.outputs.jobsPrincipalId }
 }
 
+module apiTelemetry 'modules/appinsights-publisher.bicep' = {
+  name: '${namePrefix}-api-telemetry'
+  scope: sharedRg
+  params: { appInsightsName: appInsightsName, principalId: identities.outputs.apiPrincipalId }
+}
+
 module frontDoor 'modules/frontdoor-profile.bicep' = {
   name: '${namePrefix}-frontdoor'
   scope: rg
@@ -210,6 +218,7 @@ module apps 'modules/containerapps.bicep' = {
     image: image
     registryServer: acrLoginServer
     apiIdentityId: identities.outputs.apiId
+    apiIdentityClientId: identities.outputs.apiClientId
     jobsIdentityId: identities.outputs.jobsId
     keyVaultUri: vault.outputs.uri
     gbaEnv: env
@@ -240,6 +249,23 @@ module routing 'modules/frontdoor-routing.bicep' = {
   }
 }
 
+module alerts 'modules/alerts.bicep' = {
+  name: '${namePrefix}-alerts'
+  scope: rg
+  params: {
+    location: location
+    namePrefix: namePrefix
+    tags: tags
+    contactEmails: budgetContactEmails
+    frontDoorProfileId: frontDoor.outputs.profileId
+    postgresServerId: postgres.outputs.id
+    apiContainerAppId: apps.outputs.apiId
+    appInsightsId: apiTelemetry.outputs.appInsightsId
+    serviceName: apps.outputs.apiServiceName
+    connectionBudget: maxReplicas * dbPoolMaxSize + 16
+  }
+}
+
 module budget 'modules/budget.bicep' = if (!isProduction) {
   name: '${namePrefix}-budget'
   params: {
@@ -263,3 +289,4 @@ output containerAppsEnvironmentId string = apps.outputs.environmentId
 output migrateJobName string = apps.outputs.migrateJobName
 output bootstrapJobName string = apps.outputs.bootstrapJobName
 output postgresFqdn string = postgres.outputs.fqdn
+output alertNames array = alerts.outputs.alertNames

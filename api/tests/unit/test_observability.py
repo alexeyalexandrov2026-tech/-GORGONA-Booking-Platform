@@ -17,7 +17,7 @@ from opentelemetry.sdk.metrics.export import InMemoryMetricReader, NumberDataPoi
 from gorgona_booking.api.app import create_app
 from gorgona_booking.config import Settings
 from gorgona_booking.errors import NotFoundError
-from gorgona_booking.observability import JsonFormatter, start_telemetry
+from gorgona_booking.observability import JsonFormatter, exporter_credential, start_telemetry
 
 pytestmark = pytest.mark.anyio
 
@@ -136,3 +136,13 @@ def test_connection_string_is_read_from_env_and_kept_secret() -> None:
     assert settings.applicationinsights_connection_string is not None
     assert settings.applicationinsights_connection_string.get_secret_value() == value
     assert "InstrumentationKey" not in repr(settings)
+
+
+def test_exporter_uses_the_managed_identity_when_azure_client_id_is_set() -> None:
+    # Application Insights disables local (key) auth; ingestion must use Entra.
+    from azure.identity import ManagedIdentityCredential
+
+    assert exporter_credential({}) is None
+    assert exporter_credential({"AZURE_CLIENT_ID": "  "}) is None
+    credential = exporter_credential({"AZURE_CLIENT_ID": "00000000-0000-0000-0000-00000000c1d0"})
+    assert isinstance(credential, ManagedIdentityCredential)

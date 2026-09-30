@@ -103,6 +103,7 @@ resource waf 'Microsoft.Network/FrontDoorWebApplicationFirewallPolicies@2025-11-
 }
 
 output profileName string = profile.name
+output profileId string = profile.id
 output frontDoorId string = profile.properties.frontDoorId
 output wafPolicyId string = waf.id
 output endpointIds array = [for (e, i) in endpointNames: endpoints[i].id]

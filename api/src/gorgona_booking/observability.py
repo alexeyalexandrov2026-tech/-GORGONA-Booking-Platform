@@ -8,8 +8,10 @@
 - Domain error codes are counted (`gorgona.domain_errors`, by code and route
   template) through the OpenTelemetry API; they cost nothing when no provider is set.
 - `start_telemetry` exports traces and metrics to Application Insights only when
-  APPLICATIONINSIGHTS_CONNECTION_STRING is set. It is called by the process
-  entrypoint, never by tests.
+  APPLICATIONINSIGHTS_CONNECTION_STRING is set. The Azure resource disables local
+  (key) auth, so in Azure the exporters authenticate with the user-assigned managed
+  identity named by AZURE_CLIENT_ID. It is called by the process entrypoint, never by
+  tests.
 """
 
 import json
@@ -18,13 +20,18 @@ import os
 import sys
 import time
 import traceback
+from collections.abc import Mapping
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from opentelemetry import metrics, trace
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from gorgona_booking.config import Settings
+
+if TYPE_CHECKING:
+    from azure.core.credentials import TokenCredential
 
 _ALLOWED_FIELDS = (
     "request_id",
@@ -126,6 +133,16 @@ class AccessLogMiddleware:
             )
 
 
+def exporter_credential(environ: Mapping[str, str]) -> TokenCredential | None:
+    """Entra credential for ingestion: the user-assigned identity from AZURE_CLIENT_ID."""
+    client_id = environ.get("AZURE_CLIENT_ID", "").strip()
+    if not client_id:
+        return None
+    from azure.identity import ManagedIdentityCredential
+
+    return ManagedIdentityCredential(client_id=client_id)
+
+
 def start_telemetry(app: FastAPI, settings: Settings) -> bool:
     """Export traces and metrics to Application Insights when configured."""
     secret = settings.applicationinsights_connection_string
@@ -144,10 +161,13 @@ def start_telemetry(app: FastAPI, settings: Settings) -> bool:
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
     connection_string = secret.get_secret_value()
+    credential = exporter_credential(os.environ)
     resource = Resource.create({"service.name": os.environ.get("OTEL_SERVICE_NAME", "gorgona-api")})
     tracer_provider = TracerProvider(resource=resource)
     tracer_provider.add_span_processor(
-        BatchSpanProcessor(AzureMonitorTraceExporter(connection_string=connection_string))
+        BatchSpanProcessor(
+            AzureMonitorTraceExporter(connection_string=connection_string, credential=credential)
+        )
     )
     trace.set_tracer_provider(tracer_provider)
     metrics.set_meter_provider(
@@ -155,7 +175,9 @@ def start_telemetry(app: FastAPI, settings: Settings) -> bool:
             resource=resource,
             metric_readers=[
                 PeriodicExportingMetricReader(
-                    AzureMonitorMetricExporter(connection_string=connection_string)
+                    AzureMonitorMetricExporter(
+                        connection_string=connection_string, credential=credential
+                    )
                 )
             ],
         )

@@ -41,8 +41,24 @@ az bicep build-params --file params/staging.create.bicepparam --outfile $env:TEM
 - **Update mode.** The `*.update.bicepparam` files read them back with `getSecret()`. The vault allows ARM template deployment through the trusted-services bypass; public network access stays disabled.
 - **Least privilege.** The API identity can read only `database-url`. The jobs identity can read only the migration, admin and role-password secrets.
 
+## Alerts and telemetry
+
+- `modules/alerts.bicep` deploys, per environment:
+  - one operator action group (the budget e-mail recipients);
+  - six metric alerts: Front Door origin health and 5xx share, PostgreSQL `is_db_alive`, storage and connection budget, and replica restarts;
+  - three log alerts on the shared Application Insights: p95 latency, confirmation 5xx, and a `TENANT_NOT_FOUND` anomaly.
+- Log alerts filter on `cloud_RoleName`. The API sets `OTEL_SERVICE_NAME=gorgona-api-<env>`.
+- Application Insights disables local (key) auth. Each environment's stack grants its API identity **Monitoring Metrics Publisher** on the shared component (`modules/appinsights-publisher.bicep`), and the app authenticates with `AZURE_CLIENT_ID`.
+
+## Releases
+
+- `.github/workflows/deploy-staging.yml` is dormant. It uses a manual trigger, the `staging` GitHub environment with required reviewers, OIDC federation (no Azure secret in GitHub), a digest-pinned image scanner, and `GBA_STAGING_WINDOW_OPEN=true`.
+- It runs build -> scan -> push by digest -> migrate job -> new revision -> Front Door smoke -> automatic traffic rollback on failure.
+- `promote-production.yml` refuses by design.
+- A stack **update** must pass the currently deployed image digest in `GBA_IMAGE`; otherwise it reverts the revision.
+
 ## Known compatibility items (prove in staging)
 
 - `gba-db bootstrap` against the Azure PostgreSQL admin, which is not a superuser, under PostgreSQL 16+ CREATEROLE rules.
-- Application settings consumed by checkpoint B code, which do not exist in the app yet: `GBA_TRUSTED_PROXY`, `GBA_FRONT_DOOR_ID`, `APPLICATIONINSIGHTS_CONNECTION_STRING`.
-- The image entrypoint and the `gba-db` console script, which the checkpoint B Dockerfile provides.
+- `max_connections` of the chosen SKU against the connection budget used by the `pool-saturation` alert.
+- Alert queries against real telemetry (table and column names are validated by Azure only at rule creation).

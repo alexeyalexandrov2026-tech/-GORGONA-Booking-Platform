@@ -22,5 +22,6 @@ resource jobs 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
 
 output apiId string = api.id
 output apiPrincipalId string = api.properties.principalId
+output apiClientId string = api.properties.clientId
 output jobsId string = jobs.id
 output jobsPrincipalId string = jobs.properties.principalId

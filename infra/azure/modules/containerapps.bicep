@@ -31,6 +31,9 @@ param registryServer string
 @description('User-assigned identity resource ID for the API app.')
 param apiIdentityId string
 
+@description('Client ID of the API identity (AZURE_CLIENT_ID: Entra auth for telemetry ingestion).')
+param apiIdentityClientId string
+
 @description('User-assigned identity resource ID for the migrate/bootstrap jobs.')
 param jobsIdentityId string
 
@@ -138,7 +141,8 @@ resource api 'Microsoft.App/containerApps@2026-01-01' = {
             { name: 'GBA_AUTH_ISSUER', value: authIssuer }
             { name: 'GBA_AUTH_AUDIENCE', value: authAudience }
             { name: 'GBA_AUTH_JWKS_URL', value: authJwksUrl }
-            { name: 'OTEL_SERVICE_NAME', value: 'gorgona-api' }
+            { name: 'OTEL_SERVICE_NAME', value: 'gorgona-api-${gbaEnv}' }
+            { name: 'AZURE_CLIENT_ID', value: apiIdentityClientId }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
           ]
           probes: [
@@ -268,5 +272,7 @@ resource bootstrap 'Microsoft.App/jobs@2026-01-01' = {
 output environmentId string = environment.id
 output apiFqdn string = api.properties.configuration.ingress.fqdn
 output apiName string = api.name
+output apiId string = api.id
+output apiServiceName string = 'gorgona-api-${gbaEnv}'
 output migrateJobName string = migrate.name
 output bootstrapJobName string = bootstrap.name

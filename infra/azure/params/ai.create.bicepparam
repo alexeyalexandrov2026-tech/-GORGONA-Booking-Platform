@@ -10,5 +10,10 @@ param appInsightsId = readEnvironmentVariable('GBA_APPINSIGHTS_ID')
 param containerRegistryId = readEnvironmentVariable('GBA_ACR_ID')
 param operatorPrincipalId = readEnvironmentVariable('GBA_OPERATOR_OBJECT_ID')
 param deployGpuCluster = false
+// Deferred on this subscription: Container Apps allows 1 managed environment in eastus2
+// (read 2026-09-30: "Managed Environment Count" limit 1), and that slot is the
+// production-parity staging environment. It holds no jobs yet; turn on once the quota
+// allows a second environment.
+param deployJobsEnvironment = false
 param lockResourceGroup = true
 param postgresAdminPassword = readEnvironmentVariable('GBA_AI_PG_ADMIN_PASSWORD')

@@ -32,6 +32,9 @@ param postgresStorageGB int = 32
 @description('Declare the GPU training cluster (needs GPU quota and pay-as-you-go).')
 param deployGpuCluster bool = false
 
+@description('Deploy the AI jobs Container Apps environment. Part of the architecture; turn off only where the regional managed-environment quota cannot hold it next to the platform environment (see params).')
+param deployJobsEnvironment bool = true
+
 @description('Apply a CanNotDelete lock to the AI resource group.')
 param lockResourceGroup bool = true
 
@@ -130,7 +133,7 @@ module queue 'modules/ai-servicebus.bicep' = {
   params: { location: location, name: 'sb-${namePrefix}-${uniqueSuffix}', tags: tags }
 }
 
-module jobs 'modules/ai-jobs-environment.bicep' = {
+module jobs 'modules/ai-jobs-environment.bicep' = if (deployJobsEnvironment) {
   name: 'ai-jobs-environment'
   scope: rg
   params: {

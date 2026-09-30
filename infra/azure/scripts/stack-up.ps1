@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Create or update one GORGONA deployment stack (shared | ai | staging | production).
+  Create or update one GORGONA deployment stack (budgets | shared | ai | staging | production).
 
 .DESCRIPTION
   Without -Execute this prints the plan and the exact az commands and makes NO Azure
@@ -12,12 +12,15 @@
   the az child process through environment variables, and then removed. They are never
   written to disk or printed. Update mode reads them back from Key Vault via getSecret().
 
+  The `budgets` stack (subscription budget + cost-anomaly alert, both free) must exist
+  before any other stack is previewed or executed; the script checks this read-only.
+
   Non-secret inputs (GBA_UNIQUE_SUFFIX, GBA_IMAGE, GBA_ACR_*, GBA_AUTH_*, GBA_BUDGET_*,
   GBA_OPERATOR_OBJECT_ID, ...) must already be set in the environment.
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)] [ValidateSet('shared', 'ai', 'staging', 'production')] [string] $Stack,
+    [Parameter(Mandatory)] [ValidateSet('budgets', 'shared', 'ai', 'staging', 'production')] [string] $Stack,
     [ValidateSet('create', 'update')] [string] $Mode = 'create',
     [switch] $Preview,
     [switch] $Execute
@@ -27,13 +30,14 @@ $root = Split-Path -Parent $PSScriptRoot
 $az = 'az'
 
 $policy = @{
+    budgets    = @{ Template = 'main-budgets.bicep';  ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
     shared     = @{ Template = 'main-shared.bicep';   ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
     ai         = @{ Template = 'main-ai.bicep';       ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
     staging    = @{ Template = 'main-platform.bicep'; ActionOnUnmanage = 'deleteAll'; Deny = 'none' }
     production = @{ Template = 'main-platform.bicep'; ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
 }[$Stack]
 
-$paramFile = if ($Stack -eq 'shared') { 'shared.bicepparam' } else { "$Stack.$Mode.bicepparam" }
+$paramFile = if ($Stack -in @('budgets', 'shared')) { "$Stack.bicepparam" } else { "$Stack.$Mode.bicepparam" }
 $stackName = "gorgona-$Stack"
 $secretVars = switch ($Stack) {
     'ai'         { @('GBA_AI_PG_ADMIN_PASSWORD') }
@@ -75,6 +79,18 @@ Write-Host "Execute cmd   : az $($createArgs -join ' ')"
 if (-not $Preview -and -not $Execute) {
     Write-Host "`nDRY RUN: no Azure call was made. Use -Preview or -Execute only with owner approval."
     return
+}
+
+if ($Stack -ne 'budgets') {
+    # Cost guardrails first: read-only check that the budgets stack exists and succeeded.
+    # PowerShell 5.1 turns native stderr into a terminating error under 'Stop'.
+    $ErrorActionPreference = 'Continue'
+    $state = & $az stack sub show --name gorgona-budgets --query provisioningState -o tsv 2>$null
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($code -ne 0 -or "$state".Trim() -ne 'succeeded') {
+        throw "Refusing: deploy the 'budgets' stack first (budget + cost-anomaly alert). State: '$state'"
+    }
 }
 
 $generated = @()

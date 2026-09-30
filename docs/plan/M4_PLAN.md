@@ -56,7 +56,7 @@ Costs are pay-as-you-go estimates, to re-verify in the pricing calculator after 
 
 | # | Resource | RG / stack | Class | Tier / SKU | Idle cost | Active cost | Est. monthly | Free allowance | Why required |
 |---|---|---|---|---|---|---|---|---|---|
-| 0 | Subscription and RG budgets + cost alerts | subscription | 1 | Cost Management budget | $0 | $0 | $0 | n/a | Guard the $200 credit and stop surprises. **Create first.** |
+| 0 | Subscription budget + daily cost-anomaly alert (`main-budgets.bicep`, stack `gorgona-budgets`); per-RG staging budget in the platform stack | subscription | 1 | Cost Management budget + scheduled action | $0 | $0 | $0 | n/a | Guard the credit and stop surprises. **Create first; enforced by `stack-up.ps1`.** |
 | 1 | Resource groups (shared, AI, staging, prod) + locks | subscription | 1 / 4 / 5 | n/a | $0 | $0 | $0 | n/a | Lifecycle boundaries; staging has no lock |
 | 2 | Log Analytics workspace | shared | 1 | Pay-per-GB, 30-day retention | ~$0 | ~$2.3–2.8/GB over the free 5 GB | $0–10 | 5 GB/mo ingestion (Azure Monitor) | Central logs and metrics for alerts |
 | 3 | Application Insights (workspace-based) | shared | 1 | Workspace-based | ~$0 | Included in Log Analytics ingestion | $0–5 | Shares the 5 GB | Traces and request telemetry |

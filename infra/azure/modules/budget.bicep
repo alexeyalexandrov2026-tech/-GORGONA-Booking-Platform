@@ -32,6 +32,13 @@ resource budget 'Microsoft.Consumption/budgets@2026-06-01' = {
           dimensions: { name: 'ResourceGroupName', operator: 'In', values: [resourceGroupName] }
         }
     notifications: {
+      actual25: {
+        enabled: true
+        operator: 'GreaterThanOrEqualTo'
+        threshold: 25
+        thresholdType: 'Actual'
+        contactEmails: contactEmails
+      }
       actual50: {
         enabled: true
         operator: 'GreaterThanOrEqualTo'

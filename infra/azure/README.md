@@ -6,6 +6,7 @@ Design: [`docs/architecture/AZURE_ARCHITECTURE.md`](../../docs/architecture/AZUR
 
 | Entry point | Stack | Lifecycle | On unmanage / deny |
 |---|---|---|---|
+| `main-budgets.bicep` | `gorgona-budgets` | Cost guardrails (free), **deployed first** | detachAll / denyDelete |
 | `main-shared.bicep` | `gorgona-shared` | Persistent | detachAll / denyDelete + RG lock |
 | `main-ai.bicep` | `gorgona-ai` | Persistent AI learning plane | detachAll / denyDelete + RG lock |
 | `main-platform.bicep` (`env=staging`) | `gorgona-staging` | Ephemeral, production-parity | **deleteAll** / none |
@@ -24,16 +25,19 @@ az bicep build-params --file params/staging.create.bicepparam --outfile $env:TEM
 
 ## Order (each step separately approved)
 
-1. `stack-up.ps1 -Stack shared`: budgets, Log Analytics, App Insights, ACR.
-2. `stack-up.ps1 -Stack ai`: the persistent learning plane.
-3. Build and push the image; record its digest in `GBA_IMAGE`.
-4. `stack-up.ps1 -Stack staging`. Then:
+0. The owner upgrades the subscription to pay-as-you-go (Front Door is not available on the Free Trial; see M4_REPORT).
+1. `stack-up.ps1 -Stack budgets`: a subscription budget (actual 25/50/80/100%, forecast 100%) and a daily cost-anomaly alert, both free. `stack-up.ps1` refuses every other stack until `gorgona-budgets` has succeeded.
+2. `register-providers.ps1` (dry run lists the state; `-Execute` registers). This is a free subscription-level change; use `-Scope all` only when the AI plane is approved.
+3. `stack-up.ps1 -Stack shared`: Log Analytics, App Insights, ACR.
+4. `stack-up.ps1 -Stack ai`: the persistent learning plane.
+5. Build and push the image; record its digest in `GBA_IMAGE`.
+6. `stack-up.ps1 -Stack staging`. Then:
    - approve the Front Door private endpoint on the Container Apps environment;
    - run the bootstrap job once, then the migrate job;
    - seed the FAKE tenants, host mappings and embed origins.
-5. Run the staging acceptance.
-6. Tear down with `staging-down.ps1 -Execute`.
-7. Production is created only after staging evidence and owner authorization.
+7. Run the staging acceptance.
+8. Tear down with `staging-down.ps1 -Execute`.
+9. Production is created only after staging evidence and owner authorization.
 
 ## Secrets
 

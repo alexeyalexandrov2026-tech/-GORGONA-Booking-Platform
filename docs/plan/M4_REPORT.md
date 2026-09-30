@@ -197,7 +197,10 @@ Estimates (to re-verify after sign-in):
 
 ## Remaining blockers and next steps
 
-1. **Owner decision on the Front Door finding** (options a/b/c under Azure discovery). Read-only discovery is done: PostgreSQL 18 is offered; the account is unambiguous.
+1. **Owner decision (2026-09-30): option (a).** The owner upgrades to pay-as-you-go, keeps the remaining credit, and approves every resource individually. Budget and cost alerts come before any paid resource.
+   - Prepared: `main-budgets.bicep` (subscription budget: actual 25/50/80/100%, forecast 100%; daily cost-anomaly alert); `register-providers.ps1`, a dry run by default.
+   - `stack-up.ps1` now refuses every other stack until `gorgona-budgets` exists. Verified against the live subscription: shared, ai and staging are refused, using only a read-only check.
+   - Next approvals in order: (1) budgets stack, with the owner stating the amount and recipient; (2) provider registration; (3) shared; (4) AI plane; (5) staging window.
 2. **Before any staging window:**
    - choose a staging OIDC provider (the start guard requires one; for example an Entra ID test app registration, which is itself an approval item);
    - create a GitHub OIDC federated credential and the `staging` environment with reviewers and variables (only if CI deploys are wanted; `stack-up.ps1` works without it);

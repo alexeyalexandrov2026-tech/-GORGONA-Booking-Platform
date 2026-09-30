@@ -44,3 +44,35 @@ def test_invalid_settings_are_rejected(environ: dict[str, str]) -> None:
 def test_m1_refuses_to_run_outside_development(environment: str) -> None:
     with pytest.raises(UnsafeEnvironmentError):
         assert_environment_allowed(Settings.from_env({"GBA_ENV": environment}))
+
+
+_STAGING_READY = {
+    "GBA_ENV": "staging",
+    "GBA_AUTH_ISSUER": "https://idp.example.test/",
+    "GBA_AUTH_AUDIENCE": "api://gorgona-staging",
+    "GBA_AUTH_JWKS_URL": "https://idp.example.test/jwks",
+    "GBA_TRUSTED_PROXY": "azure_front_door",
+    "GBA_FRONT_DOOR_ID": "a0a0a0a0-bbbb-cccc-dddd-e1e1e1e1e1e1",
+}
+
+
+def test_staging_starts_only_behind_front_door_with_oidc() -> None:
+    assert_environment_allowed(Settings.from_env(_STAGING_READY))
+
+
+@pytest.mark.parametrize(
+    ("drop", "reason"),
+    [
+        (("GBA_AUTH_ISSUER", "GBA_AUTH_AUDIENCE", "GBA_AUTH_JWKS_URL"), "OIDC"),
+        (("GBA_TRUSTED_PROXY", "GBA_FRONT_DOOR_ID"), "Front Door"),
+    ],
+)
+def test_staging_is_refused_without_each_condition(drop: tuple[str, ...], reason: str) -> None:
+    environ = {k: v for k, v in _STAGING_READY.items() if k not in drop}
+    with pytest.raises(UnsafeEnvironmentError, match=reason):
+        assert_environment_allowed(Settings.from_env(environ))
+
+
+def test_production_stays_refused_even_when_every_condition_is_met() -> None:
+    with pytest.raises(UnsafeEnvironmentError, match="production"):
+        assert_environment_allowed(Settings.from_env({**_STAGING_READY, "GBA_ENV": "production"}))

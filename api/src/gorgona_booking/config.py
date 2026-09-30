@@ -112,13 +112,28 @@ class Settings(BaseModel):
 
 
 class UnsafeEnvironmentError(RuntimeError):
-    """Raised when the app is started somewhere M1 is not allowed to run."""
+    """Raised when the app is started somewhere it is not yet allowed to run."""
 
 
 def assert_environment_allowed(settings: Settings) -> None:
-    # M1 has no authentication or rate limiting; it must not serve real traffic.
-    if settings.environment in ("staging", "production"):
+    """Production is refused until a production milestone is authorized (ADR-0012).
+
+    Staging may start only behind the trusted Front Door boundary (Private Link origin,
+    X-Azure-FDID check, edge WAF rate limits) with an OIDC provider for staff APIs.
+    The governed framing policy is always active. Required deposits still fail closed.
+    """
+    if settings.environment == "production":
         raise UnsafeEnvironmentError(
-            f"refusing to start in {settings.environment!r}: M1 has no authentication, "
-            "rate limiting or payment verification"
+            "refusing to start in 'production': production deployment is not authorized"
+        )
+    if settings.environment != "staging":
+        return
+    missing = []
+    if not settings.auth_configured:
+        missing.append("an OIDC provider (GBA_AUTH_ISSUER/AUDIENCE/JWKS_URL)")
+    if settings.trusted_proxy != "azure_front_door" or settings.front_door_id is None:
+        missing.append("the trusted Front Door boundary (GBA_TRUSTED_PROXY, GBA_FRONT_DOOR_ID)")
+    if missing:
+        raise UnsafeEnvironmentError(
+            "refusing to start in 'staging' without " + " and ".join(missing)
         )

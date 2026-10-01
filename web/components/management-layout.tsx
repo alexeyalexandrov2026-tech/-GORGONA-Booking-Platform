@@ -24,6 +24,7 @@ interface ManagementLayoutProps {
 const NAV_ITEMS = [
   { href: "/overview/", label: "Overview" },
   { href: "/calendar/", label: "Calendar" },
+  { href: "/bookings/", label: "Bookings" },
   { href: "/services/", label: "Services" },
   { href: "/staff/", label: "Staff" },
   { href: "/clients/", label: "Clients" },

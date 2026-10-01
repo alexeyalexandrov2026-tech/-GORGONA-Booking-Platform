@@ -5,11 +5,13 @@ Job entrypoints (Container Apps Jobs):
   pump-evidence  event-driven: Service Bus -> durable ingest runs, then drain ingest
   run            drain due runs (optionally only some kinds)
   health         exit 1 when unhealthy
+  netcheck       DNS/TCP preflight of the environment's dependencies (no database)
 Operator commands: bootstrap, migrate, review, promote, rollback, search.
 
 Configuration (environment): GAI_DATABASE_URL (worker role), GAI_MIGRATION_DATABASE_URL
 (owner), GAI_ADMIN_DATABASE_URL + GAI_OWNER_PASSWORD + GAI_WORKER_PASSWORD (bootstrap),
-GAI_DATABASE_NAME, GAI_SERVICEBUS_NAMESPACE, GAI_EVIDENCE_QUEUE, AZURE_CLIENT_ID.
+GAI_DATABASE_NAME, GAI_SERVICEBUS_NAMESPACE, GAI_EVIDENCE_QUEUE, AZURE_CLIENT_ID,
+GAI_NETCHECK_TARGETS + GAI_NETCHECK_SECRETS (netcheck).
 """
 
 import argparse
@@ -22,7 +24,7 @@ from uuid import UUID
 
 import psycopg
 
-from gorgona_ai import db, evidence, pipeline
+from gorgona_ai import db, evidence, netcheck, pipeline
 from gorgona_ai.intake import ServiceBusSource, pump
 from gorgona_ai.jobs.runtime import drain
 from gorgona_ai.observability import configure_logging, health
@@ -48,6 +50,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("bootstrap")
     sub.add_parser("migrate")
+    sub.add_parser("netcheck")
     sub.add_parser("tick")
     sub.add_parser("pump-evidence")
     run = sub.add_parser("run")
@@ -87,6 +90,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         applied = db.migrate(_env("GAI_MIGRATION_DATABASE_URL"))
         print("applied: " + (", ".join(applied) if applied else "nothing to apply"))
         return 0
+    if args.command == "netcheck":
+        secrets = [n for n in os.environ.get("GAI_NETCHECK_SECRETS", "").split(",") if n]
+        report = netcheck.check(
+            netcheck.parse_targets(_env("GAI_NETCHECK_TARGETS")), os.environ, secrets
+        )
+        print(json.dumps(report))
+        return 0 if report["ok"] else 1
     with _connect() as conn:
         if args.command == "tick":
             pipeline.schedule_periodic(conn)

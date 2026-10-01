@@ -27,7 +27,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('budgets', 'shared', 'ai', 'staging')] [string] $Stage = 'budgets',
+    [ValidateSet('budgets', 'shared', 'ai', 'ai-jobs', 'staging')] [string] $Stage = 'budgets',
     [int] $BudgetAmount = 100,
     [string] $BudgetStart = '2026-10-01',
     [string] $Image,
@@ -62,7 +62,7 @@ $set = [ordered]@{
     GBA_PRODUCTION_KV_NAME  = "kv-gba-prd-$suffix"
 }
 
-if ($Stage -in @('ai', 'staging')) {
+if ($Stage -in @('ai', 'ai-jobs', 'staging')) {
     $set.GBA_OPERATOR_OBJECT_ID = Get-AzValue @('ad', 'signed-in-user', 'show', '--query', 'id', '-o', 'tsv')
     $outputs = Get-AzValue @('stack', 'sub', 'show', '--name', 'gorgona-shared', '--query', 'outputs', '-o', 'json') |
         Out-String | ConvertFrom-Json

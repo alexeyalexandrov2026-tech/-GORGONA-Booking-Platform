@@ -1,11 +1,15 @@
 // Consumption-only Container Apps environment for the AI-plane jobs (ai-jobs.bicep).
-// Internal (AI VNet only); it reaches the AI database, vault and evidence store through
-// their private endpoints. Logs go to the shared Log Analytics workspace.
+// Internal (VNet only, no ingress, no inbound private endpoint); it reaches the AI
+// database, vault and evidence store through their private endpoints (directly or over
+// VNet peering). Logs go to the shared Log Analytics workspace.
 @description('Azure region.')
 param location string
 
 @description('Name prefix.')
 param namePrefix string
+
+@description('Environment name (default cae-<namePrefix>).')
+param name string = 'cae-${namePrefix}'
 
 @description('Resource tags.')
 param tags object
@@ -17,7 +21,7 @@ param infrastructureSubnetId string
 param logAnalyticsWorkspaceId string
 
 resource environment 'Microsoft.App/managedEnvironments@2026-01-01' = {
-  name: 'cae-${namePrefix}'
+  name: name
   location: location
   tags: tags
   properties: {

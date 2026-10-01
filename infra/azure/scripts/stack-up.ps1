@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Create or update one GORGONA deployment stack (budgets | shared | ai | staging | production).
+  Create or update one GORGONA deployment stack (budgets | shared | ai | ai-jobs | staging | production).
 
 .DESCRIPTION
   Without -Execute this prints the plan and the exact az commands and makes NO Azure
@@ -20,7 +20,7 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)] [ValidateSet('budgets', 'shared', 'ai', 'staging', 'production')] [string] $Stack,
+    [Parameter(Mandatory)] [ValidateSet('budgets', 'shared', 'ai', 'ai-jobs', 'staging', 'production')] [string] $Stack,
     [ValidateSet('create', 'update')] [string] $Mode = 'create',
     [switch] $Preview,
     [switch] $Execute,
@@ -35,11 +35,12 @@ $policy = @{
     budgets    = @{ Template = 'main-budgets.bicep';  ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
     shared     = @{ Template = 'main-shared.bicep';   ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
     ai         = @{ Template = 'main-ai.bicep';       ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
+    'ai-jobs'  = @{ Template = 'main-ai-jobs.bicep';  ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
     staging    = @{ Template = 'main-platform.bicep'; ActionOnUnmanage = 'deleteAll'; Deny = 'none' }
     production = @{ Template = 'main-platform.bicep'; ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
 }[$Stack]
 
-$paramFile = if ($Stack -in @('budgets', 'shared')) { "$Stack.bicepparam" } else { "$Stack.$Mode.bicepparam" }
+$paramFile = if ($Stack -in @('budgets', 'shared', 'ai-jobs')) { "$Stack.bicepparam" } else { "$Stack.$Mode.bicepparam" }
 $stackName = "gorgona-$Stack"
 $secretVars = switch ($Stack) {
     'ai'         { @('GBA_AI_PG_ADMIN_PASSWORD', 'GBA_AI_OWNER_ROLE_PASSWORD', 'GBA_AI_WORKER_ROLE_PASSWORD') }

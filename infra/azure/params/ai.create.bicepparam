@@ -15,9 +15,13 @@ param operatorPrincipalId = readEnvironmentVariable('GBA_OPERATOR_OBJECT_ID')
 param deployGpuCluster = false
 // Azure ML quota read 2026-10-01 (centralus): standardDDSv5Family 4 vCPUs; D4ds_v5 has 4.
 param cpuMaxNodes = 1
-// Dedicated AI jobs environment (ADR-0013). Container Apps environment quota is 20 per
-// region since the pay-as-you-go upgrade (read 2026-10-01).
-param deployJobsEnvironment = true
+// The dedicated AI jobs environment (ADR-0013) moved to stack gorgona-ai-jobs
+// (main-ai-jobs.bicep, jobs_region westus3): Central US refused new Container Apps
+// environments twice on 2026-10-01 (ManagedEnvironmentCapacityHeavyUsageError). Never
+// true here again without an owner decision: it would retry the Central US environment.
+// On the next gorgona-ai update the failed cae-gorgona-ai is DETACHED (detachAll), not
+// deleted; deleting it is a separate owner approval.
+param deployJobsEnvironment = false
 param lockResourceGroup = true
 param postgresAdminPassword = readEnvironmentVariable('GBA_AI_PG_ADMIN_PASSWORD')
 param ownerRolePassword = readEnvironmentVariable('GBA_AI_OWNER_ROLE_PASSWORD')

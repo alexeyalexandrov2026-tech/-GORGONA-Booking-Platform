@@ -192,6 +192,9 @@ test("availability network failure has a usable retry", async ({ page }) => {
     page.getByRole("button", { name: "Retry availability" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Retry availability" }).click();
+  if (process.env.GBA_BROWSER_DAY) {
+    await page.getByLabel("Date").fill(process.env.GBA_BROWSER_DAY);
+  }
   await expect(page.getByRole("button", { name: /^\d/ }).first()).toBeVisible();
 });
 

@@ -406,3 +406,304 @@ footer {
     scroll-behavior: auto !important;
   }
 }
+
+/* --- GORGONA Management Platform Styles --- */
+.management-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.mgmt-header {
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  padding: 0 32px;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.mgmt-brand-area {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.mgmt-brand {
+  font-family: Georgia, serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+}
+.mgmt-brand span {
+  font-family: Arial, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 8px;
+}
+.mgmt-salon-select {
+  min-height: 38px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  width: auto;
+}
+.mgmt-salon-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ivory);
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+.mgmt-role-tag {
+  background: var(--blush);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: #785738;
+}
+.mgmt-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mgmt-action-btn {
+  min-height: 38px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
+.mgmt-nav {
+  background: #f7f3ed;
+  border-bottom: 1px solid var(--line);
+  padding: 0 32px;
+}
+.mgmt-nav-list {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  gap: 8px;
+}
+.mgmt-nav-link {
+  display: inline-block;
+  padding: 14px 16px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+}
+.mgmt-nav-link:hover {
+  color: var(--ink);
+}
+.mgmt-nav-link.active {
+  color: var(--ink);
+  font-weight: 700;
+  border-bottom-color: var(--accent);
+}
+.mgmt-main {
+  flex: 1;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 32px;
+}
+.mgmt-loading,
+.mgmt-empty-state,
+.mgmt-auth-gate {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 40px;
+  text-align: center;
+  max-width: 600px;
+  margin: 40px auto;
+}
+.mgmt-token-form {
+  text-align: left;
+  margin-top: 24px;
+}
+.mgmt-form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.mgmt-error-banner {
+  background: #fcf0ee;
+  border: 1px solid #d99a91;
+  padding: 24px;
+  border-radius: 6px;
+  margin-bottom: 24px;
+  color: #70291f;
+}
+.mgmt-error-banner h3 {
+  margin: 0 0 8px;
+}
+.mgmt-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+.mgmt-kpi-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.mgmt-kpi-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.mgmt-kpi-number {
+  font-size: 2rem;
+  font-family: Georgia, serif;
+  color: var(--ink);
+}
+.mgmt-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 32px 0 16px;
+}
+.mgmt-section-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+.mgmt-table-container {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-x: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.mgmt-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
+}
+.mgmt-table th,
+.mgmt-table td {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.mgmt-table th {
+  background: #fcfbf9;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mgmt-table tr:hover {
+  background: #faf7f2;
+}
+.mgmt-status-pill {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.status-confirmed,
+.status-active,
+.status-live,
+.status-published {
+  background: #e6f4ea;
+  color: #137333;
+}
+.status-hold {
+  background: #fef7e0;
+  color: #b06000;
+}
+.status-cancelled,
+.status-disabled,
+.status-suspended {
+  background: #fce8e6;
+  color: #c5221f;
+}
+.status-draft,
+.status-not_live {
+  background: #f1f3f4;
+  color: #5f6368;
+}
+.mgmt-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(40, 34, 30, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+.mgmt-modal-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 32px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+.mgmt-modal-card h2 {
+  margin-top: 0;
+  font-size: 1.6rem;
+}
+.mgmt-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+  align-items: center;
+  background: #fff;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.mgmt-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mgmt-filter-group label {
+  margin-bottom: 0;
+  font-size: 0.85rem;
+}
+.mgmt-filter-group input,
+.mgmt-filter-group select {
+  min-height: 38px;
+  padding: 6px 12px;
+  margin-top: 0;
+  width: auto;
+}
+.mgmt-btn-small {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+.mgmt-appointment-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  padding: 16px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+.mgmt-appointment-card.cancelled {
+  border-left-color: #c5221f;
+  opacity: 0.7;
+}

@@ -182,6 +182,23 @@ def _grant_platform_admin(args: argparse.Namespace) -> None:
     print(f"platform_admin granted to user {row[0]}")
 
 
+def _seed_fake(args: argparse.Namespace) -> None:
+    from gorgona_booking.onboarding.fake_seed import FakeSeedRefusedError, seed_fake_salon
+
+    try:
+        with _owner_conn() as conn:
+            result = seed_fake_salon(
+                conn,
+                slug=args.slug,
+                host=args.host,
+                environment=os.environ.get("GBA_ENV", "development"),
+                actor=_operator(),
+            )
+    except FakeSeedRefusedError as exc:
+        raise SystemExit(f"refused: {exc}") from None
+    print(f"FAKE salon {args.slug} ({result.tenant_id}): {'live' if result.live else 'not live'}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="gba-db")
     commands = parser.add_subparsers(required=True)
@@ -220,6 +237,12 @@ def main(argv: list[str] | None = None) -> None:
     grant.add_argument("--issuer", required=True)
     grant.add_argument("--subject", required=True)
     grant.set_defaults(run=_grant_platform_admin)
+    fake = commands.add_parser(
+        "seed-fake", help="create a FAKE live salon for staging acceptance (never production)"
+    )
+    fake.add_argument("--slug", required=True)
+    fake.add_argument("--host", required=True)
+    fake.set_defaults(run=_seed_fake)
     args = parser.parse_args(argv)
     args.run(args)
 

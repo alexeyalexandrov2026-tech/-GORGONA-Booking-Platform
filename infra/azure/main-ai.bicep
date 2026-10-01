@@ -22,6 +22,11 @@ param peSubnetPrefix string
 @description('Shared resources (from main-shared outputs).')
 param appInsightsId string
 param containerRegistryId string
+param acrLoginServer string
+param logAnalyticsWorkspaceId string
+
+@description('AI worker image by digest (gorgona-ai@sha256:...). Empty = jobs not deployed yet.')
+param aiWorkerImage string = ''
 
 @description('AI PostgreSQL sizing (Burstable B1ms is in the free account for 12 months).')
 param postgresSku string = 'Standard_B1ms'
@@ -48,6 +53,10 @@ param operatorPrincipalId string
 @description('Generated at deploy time by scripts/stack-up.ps1; never committed.')
 @secure()
 param postgresAdminPassword string
+@secure()
+param ownerRolePassword string
+@secure()
+param workerRolePassword string
 
 var namePrefix = 'gorgona-ai'
 var tags = {
@@ -127,14 +136,79 @@ module vault 'modules/keyvault.bicep' = {
     operatorPrincipalId: operatorPrincipalId
     secrets: {
       'ai-postgres-admin-password': postgresAdminPassword
+      'ai-owner-password': ownerRolePassword
+      'ai-worker-password': workerRolePassword
+      'ai-admin-database-url': 'postgresql://gbaaiadmin:${postgresAdminPassword}@${postgres.outputs.fqdn}:5432/postgres?sslmode=require'
+      'ai-migration-database-url': 'postgresql://gai_owner:${ownerRolePassword}@${postgres.outputs.fqdn}:5432/gorgona_ai?sslmode=require'
+      'ai-database-url': 'postgresql://gai_worker:${workerRolePassword}@${postgres.outputs.fqdn}:5432/gorgona_ai?sslmode=require'
     }
   }
+}
+
+var deployWorkers = deployJobsEnvironment && !empty(aiWorkerImage)
+var registryRg = split(containerRegistryId, '/')[4]
+var registryName = last(split(containerRegistryId, '/'))
+
+module opsIdentity 'modules/user-identity.bicep' = {
+  name: 'ai-ops-identity'
+  scope: rg
+  params: { location: location, name: 'id-${namePrefix}-ops', tags: tags }
+}
+
+module workerIdentity 'modules/user-identity.bicep' = {
+  name: 'ai-worker-identity'
+  scope: rg
+  params: { location: location, name: 'id-${namePrefix}-worker', tags: tags }
+}
+
+module scalerIdentity 'modules/user-identity.bicep' = {
+  name: 'ai-scaler-identity'
+  scope: rg
+  params: { location: location, name: 'id-${namePrefix}-scaler', tags: tags }
 }
 
 module queue 'modules/ai-servicebus.bicep' = {
   name: 'ai-servicebus'
   scope: rg
-  params: { location: location, name: 'sb-${namePrefix}-${uniqueSuffix}', tags: tags }
+  params: {
+    location: location
+    name: 'sb-${namePrefix}-${uniqueSuffix}'
+    tags: tags
+    receiverPrincipalId: workerIdentity.outputs.principalId
+    scalerPrincipalId: scalerIdentity.outputs.principalId
+  }
+}
+
+module opsSecrets 'modules/secret-reader.bicep' = {
+  name: 'ai-ops-secrets'
+  scope: rg
+  params: {
+    vaultName: vault.outputs.name
+    secretNames: ['ai-admin-database-url', 'ai-owner-password', 'ai-worker-password', 'ai-migration-database-url']
+    principalId: opsIdentity.outputs.principalId
+  }
+}
+
+module workerSecrets 'modules/secret-reader.bicep' = {
+  name: 'ai-worker-secrets'
+  scope: rg
+  params: {
+    vaultName: vault.outputs.name
+    secretNames: ['ai-database-url']
+    principalId: workerIdentity.outputs.principalId
+  }
+}
+
+module opsPull 'modules/acr-pull.bicep' = {
+  name: 'ai-ops-acrpull'
+  scope: resourceGroup(registryRg)
+  params: { registryName: registryName, principalId: opsIdentity.outputs.principalId }
+}
+
+module workerPull 'modules/acr-pull.bicep' = {
+  name: 'ai-worker-acrpull'
+  scope: resourceGroup(registryRg)
+  params: { registryName: registryName, principalId: workerIdentity.outputs.principalId }
 }
 
 module jobs 'modules/ai-jobs-environment.bicep' = if (deployJobsEnvironment) {
@@ -145,7 +219,30 @@ module jobs 'modules/ai-jobs-environment.bicep' = if (deployJobsEnvironment) {
     namePrefix: namePrefix
     tags: tags
     infrastructureSubnetId: network.outputs.acaSubnetId
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
   }
+}
+
+module workers 'modules/ai-jobs.bicep' = if (deployWorkers) {
+  name: 'ai-jobs'
+  scope: rg
+  params: {
+    location: location
+    namePrefix: namePrefix
+    tags: tags
+    environmentId: jobs!.outputs.id
+    image: aiWorkerImage
+    registryServer: acrLoginServer
+    opsIdentityId: opsIdentity.outputs.id
+    workerIdentityId: workerIdentity.outputs.id
+    workerIdentityClientId: workerIdentity.outputs.clientId
+    scalerIdentityId: scalerIdentity.outputs.id
+    keyVaultUri: vault.outputs.uri
+    serviceBusNamespace: queue.outputs.name
+    evidenceQueue: queue.outputs.evidenceQueueName
+  }
+  // Key Vault references and registry pulls resolve at creation time.
+  dependsOn: [opsSecrets, workerSecrets, opsPull, workerPull]
 }
 
 module ml 'modules/ai-ml.bicep' = {
@@ -177,3 +274,4 @@ output evidenceStorageName string = evidence.outputs.name
 output aiPostgresFqdn string = postgres.outputs.fqdn
 output trainingQueueName string = queue.outputs.queueName
 output mlWorkspaceId string = ml.outputs.workspaceId
+output aiJobNames array = deployWorkers ? workers!.outputs.jobNames : []

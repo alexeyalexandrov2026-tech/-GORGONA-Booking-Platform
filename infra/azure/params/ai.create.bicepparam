@@ -8,6 +8,9 @@ param acaSubnetPrefix = '10.30.0.0/23'
 param peSubnetPrefix = '10.30.2.0/27'
 param appInsightsId = readEnvironmentVariable('GBA_APPINSIGHTS_ID')
 param containerRegistryId = readEnvironmentVariable('GBA_ACR_ID')
+param acrLoginServer = readEnvironmentVariable('GBA_ACR_LOGIN_SERVER')
+param logAnalyticsWorkspaceId = readEnvironmentVariable('GBA_LOG_WORKSPACE_ID')
+param aiWorkerImage = readEnvironmentVariable('GBA_AI_IMAGE', '')
 param operatorPrincipalId = readEnvironmentVariable('GBA_OPERATOR_OBJECT_ID')
 param deployGpuCluster = false
 // Azure ML quota read 2026-10-01 (centralus): standardDDSv5Family 4 vCPUs; D4ds_v5 has 4.
@@ -17,3 +20,5 @@ param cpuMaxNodes = 1
 param deployJobsEnvironment = true
 param lockResourceGroup = true
 param postgresAdminPassword = readEnvironmentVariable('GBA_AI_PG_ADMIN_PASSWORD')
+param ownerRolePassword = readEnvironmentVariable('GBA_AI_OWNER_ROLE_PASSWORD')
+param workerRolePassword = readEnvironmentVariable('GBA_AI_WORKER_ROLE_PASSWORD')

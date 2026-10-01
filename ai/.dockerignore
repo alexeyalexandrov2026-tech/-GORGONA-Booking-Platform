@@ -1,0 +1,8 @@
+# Build context allowlist: only what the Dockerfile copies.
+*
+!pyproject.toml
+!uv.lock
+!src/**
+**/__pycache__
+**/*.pyc
+**/.env*

@@ -31,6 +31,7 @@ param(
     [int] $BudgetAmount = 100,
     [string] $BudgetStart = '2026-10-01',
     [string] $Image,
+    [string] $AiImage,
     [string] $Location = 'centralus'
 )
 $ErrorActionPreference = 'Stop'
@@ -69,6 +70,11 @@ if ($Stage -in @('ai', 'staging')) {
     $set.GBA_ACR_ID = $outputs.acrId.value
     $set.GBA_ACR_LOGIN_SERVER = $outputs.acrLoginServer.value
     $set.GBA_LOG_WORKSPACE_ID = $outputs.workspaceId.value
+}
+
+if ($AiImage) {
+    if ($AiImage -notmatch '@sha256:[0-9a-f]{64}$') { throw '-AiImage must be pinned by digest' }
+    $set.GBA_AI_IMAGE = $AiImage
 }
 
 if ($Stage -eq 'staging') {

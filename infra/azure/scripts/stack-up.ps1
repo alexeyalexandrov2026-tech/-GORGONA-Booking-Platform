@@ -42,7 +42,7 @@ $policy = @{
 $paramFile = if ($Stack -in @('budgets', 'shared')) { "$Stack.bicepparam" } else { "$Stack.$Mode.bicepparam" }
 $stackName = "gorgona-$Stack"
 $secretVars = switch ($Stack) {
-    'ai'         { @('GBA_AI_PG_ADMIN_PASSWORD') }
+    'ai'         { @('GBA_AI_PG_ADMIN_PASSWORD', 'GBA_AI_OWNER_ROLE_PASSWORD', 'GBA_AI_WORKER_ROLE_PASSWORD') }
     'staging'    { @('GBA_PG_ADMIN_PASSWORD', 'GBA_OWNER_ROLE_PASSWORD', 'GBA_APP_ROLE_PASSWORD') }
     'production' { @('GBA_PG_ADMIN_PASSWORD', 'GBA_OWNER_ROLE_PASSWORD', 'GBA_APP_ROLE_PASSWORD') }
     default      { @() }

@@ -12,10 +12,8 @@ param operatorPrincipalId = readEnvironmentVariable('GBA_OPERATOR_OBJECT_ID')
 param deployGpuCluster = false
 // Azure ML quota read 2026-10-01 (centralus): standardDDSv5Family 4 vCPUs; D4ds_v5 has 4.
 param cpuMaxNodes = 1
-// QUOTA-BLOCKED, not complete: Container Apps allows 1 managed environment per region on
-// this subscription (read 2026-10-01 in centralus and eastus2: ManagedEnvironmentCount 1).
-// That slot is the production-parity staging environment; ADR-0013 forbids sharing it.
-// The increase to 2 is pending (the Quota API requires MFA). Turn on when granted.
-param deployJobsEnvironment = false
+// Dedicated AI jobs environment (ADR-0013). Container Apps environment quota is 20 per
+// region since the pay-as-you-go upgrade (read 2026-10-01).
+param deployJobsEnvironment = true
 param lockResourceGroup = true
 param postgresAdminPassword = readEnvironmentVariable('GBA_AI_PG_ADMIN_PASSWORD')

@@ -7,7 +7,8 @@
    - the stack is named exactly gorgona-staging;
    - rg-gorgona-staging carries the tags env=staging and lifecycle=ephemeral;
    - every resource the stack manages is inside rg-gorgona-staging, except its own
-     AcrPull role assignments on the shared registry and its own budget.
+     AcrPull role assignments on the shared registry, its own Monitoring Metrics
+     Publisher grant on the shared Application Insights, and its own budget.
   Anything else (the AI plane, production, shared resources) makes it stop.
   Without -Execute it makes no change. -TestResourceIds checks the guard offline.
 #>
@@ -30,7 +31,9 @@ function Test-StagingOnly([string[]] $ResourceIds) {
         $inStaging = $lower -match "/resourcegroups/$stagingRg(/|$)"
         $isOwnAcrPull = $lower -match '/resourcegroups/rg-gorgona-shared/providers/microsoft.containerregistry/registries/[^/]+/providers/microsoft.authorization/roleassignments/'
         $isOwnBudget = $lower -match '^/subscriptions/[^/]+/providers/microsoft.consumption/budgets/budget-gorgona-staging$'
-        if (-not ($inStaging -or $isOwnAcrPull -or $isOwnBudget)) { $violations += $id }
+        # Its own Monitoring Metrics Publisher grant on the shared Application Insights.
+        $isOwnTelemetryGrant = $lower -match '/resourcegroups/rg-gorgona-shared/providers/microsoft.insights/components/[^/]+/providers/microsoft.authorization/roleassignments/'
+        if (-not ($inStaging -or $isOwnAcrPull -or $isOwnBudget -or $isOwnTelemetryGrant)) { $violations += $id }
     }
     return , $violations
 }

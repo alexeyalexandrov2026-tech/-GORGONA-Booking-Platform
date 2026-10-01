@@ -1,0 +1,53 @@
+[project]
+name = "gorgona-ai"
+version = "0.1.0"
+description = "GORGONA AI learning plane workers (ADR-0013): evidence, datasets, training, evaluation, verification, RAG refresh."
+requires-python = ">=3.14,<3.15"
+license = "LicenseRef-Proprietary"
+dependencies = [
+    "psycopg[binary]>=3.2.10",
+    "pydantic>=2.11",
+    "azure-servicebus>=7.14",
+    "azure-identity>=1.23",
+]
+
+[project.scripts]
+gba-ai = "gorgona_ai.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.17",
+    "pytest>=8.4",
+    "ruff>=0.12",
+]
+
+[build-system]
+requires = ["uv_build>=0.8,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "B", "UP", "S", "ASYNC", "RUF", "PT", "SIM", "C4", "DTZ", "T20"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S608"]
+# The CLI reports to the operator on stdout.
+"src/gorgona_ai/cli.py" = ["T201"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["azure.servicebus.*", "azure.identity.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]

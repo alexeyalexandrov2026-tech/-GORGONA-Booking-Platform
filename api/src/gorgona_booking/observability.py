@@ -143,6 +143,77 @@ def exporter_credential(environ: Mapping[str, str]) -> TokenCredential | None:
     return ManagedIdentityCredential(client_id=client_id)
 
 
+from opentelemetry.sdk.trace import SpanProcessor
+
+
+class PrivacySpanProcessor(SpanProcessor):
+    """Sanitizes exported HTTP server spans to ensure PII and tokens are never leaked."""
+
+    def on_start(self, span: object, parent_context: object = None) -> None:
+        pass
+
+    def on_end(self, span: object) -> None:
+        if not hasattr(span, "_attributes") or span._attributes is None:
+            return
+        attrs = span._attributes._dict
+        if getattr(span, "kind", None) is trace.SpanKind.SERVER:
+            route = attrs.get("http.route")
+            safe_path = route if (route and route != "unmatched") else "/unmatched"
+            raw_url = attrs.get("http.url") or attrs.get("url.full")
+            if raw_url:
+                import urllib.parse
+
+                p = urllib.parse.urlsplit(str(raw_url))
+                base = f"{p.scheme}://{p.netloc}".replace(":None", "")
+                attrs["http.url"] = f"{base}{safe_path}"
+                attrs["url.full"] = f"{base}{safe_path}"
+            attrs["http.target"] = safe_path
+            attrs["url.path"] = safe_path
+            if "gorgona.request_id" not in attrs:
+                req_id = (
+                    attrs.get("http.request.header.x-request-id")
+                    or attrs.get("http.response.header.x-request-id")
+                )
+                if isinstance(req_id, (list, tuple)) and req_id:
+                    req_id = req_id[0]
+                if req_id:
+                    attrs["gorgona.request_id"] = str(req_id)
+
+        # Redact any sensitive headers, query parameters, or token values in all spans
+        sensitive_substrings = (
+            "authorization",
+            "token",
+            "cookie",
+            "secret",
+            "password",
+            "api-key",
+        )
+        keys_to_del = []
+        for k, v in list(attrs.items()):
+            kl = k.lower()
+            if any(s in kl for s in sensitive_substrings):
+                keys_to_del.append(k)
+            elif isinstance(v, str) and any(
+                pv in v
+                for pv in (
+                    "fake-person@",
+                    "5551234567",
+                    "fake-authorization-code",
+                    "private-booking-id",
+                    "fake-sensitive-",
+                )
+            ):
+                keys_to_del.append(k)
+        for k in keys_to_del:
+            del attrs[k]
+
+    def shutdown(self) -> None:
+        pass
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return True
+
+
 def start_telemetry(app: FastAPI, settings: Settings) -> bool:
     """Export traces and metrics to Application Insights when configured."""
     secret = settings.applicationinsights_connection_string
@@ -164,6 +235,7 @@ def start_telemetry(app: FastAPI, settings: Settings) -> bool:
     credential = exporter_credential(os.environ)
     resource = Resource.create({"service.name": os.environ.get("OTEL_SERVICE_NAME", "gorgona-api")})
     tracer_provider = TracerProvider(resource=resource)
+    tracer_provider.add_span_processor(PrivacySpanProcessor())
     tracer_provider.add_span_processor(
         BatchSpanProcessor(
             AzureMonitorTraceExporter(connection_string=connection_string, credential=credential)

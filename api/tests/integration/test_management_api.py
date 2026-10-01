@@ -11,7 +11,9 @@ Verifies:
 """
 
 from collections.abc import AsyncIterator
+from datetime import datetime
 from uuid import uuid7
+from zoneinfo import ZoneInfo
 
 import httpx
 import psycopg
@@ -21,7 +23,8 @@ from gorgona_booking.api.app import create_app
 from gorgona_booking.config import Settings
 from gorgona_booking.db.pool import RuntimePool
 from gorgona_booking.db.provisioning import add_membership
-from tests.integration.booking_support import BookingWorld, at
+from tests.integration.booking_support import BookingWorld
+from tests.integration.customer_support import customer_day, seed_customer_setup
 from tests.integration.seed import FakeUser, seed_user
 from tests.support.fake_idp import FakeIdp
 
@@ -34,7 +37,10 @@ def idp() -> FakeIdp:
 
 
 @pytest.fixture
-async def client(app_pool: RuntimePool, idp: FakeIdp) -> AsyncIterator[httpx.AsyncClient]:
+async def client(
+    app_pool: RuntimePool, idp: FakeIdp, world: BookingWorld, owner_conn: psycopg.Connection
+) -> AsyncIterator[httpx.AsyncClient]:
+    seed_customer_setup(owner_conn, world)
     app = create_app(Settings(environment="test"), pool=app_pool, token_verifier=idp.verifier())
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://api.test") as http:
@@ -95,7 +101,9 @@ async def test_staff_booking_crud_reschedule_cancel(
     variant_id = world.catalog_a.base_variant_id
 
     # 1. Staff creates confirmed booking
-    slot_time = at(11)
+    slot_time = datetime.fromisoformat(f"{customer_day()}T11:00:00").replace(
+        tzinfo=ZoneInfo("America/New_York")
+    )
     create_payload = {
         "location_id": str(location_id),
         "resource_id": str(resource_id),
@@ -135,7 +143,7 @@ async def test_staff_booking_crud_reschedule_cancel(
     assert booking_id in listed_ids
 
     # 4. Reschedule booking to another hour
-    new_slot = at(14)
+    new_slot = slot_time.replace(hour=14)
     reschedule_res = await client.post(
         f"/v1/salons/{salon_id}/bookings/{booking_id}/reschedule",
         json={"new_starts_at": new_slot.isoformat()},

@@ -22,6 +22,10 @@ class RequestIdMiddleware:
         incoming = Headers(scope=scope).get("x-request-id")
         request_id = incoming if incoming and _SAFE_REQUEST_ID.fullmatch(incoming) else uuid4().hex
         scope.setdefault("state", {})["request_id"] = request_id
+        from opentelemetry import trace
+        span = trace.get_current_span()
+        if span.is_recording():
+            span.set_attribute("gorgona.request_id", request_id)
 
         async def send_with_request_id(message: Message) -> None:
             if message["type"] == "http.response.start":

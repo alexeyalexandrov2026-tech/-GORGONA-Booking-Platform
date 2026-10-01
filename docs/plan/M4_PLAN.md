@@ -8,7 +8,7 @@ Owner decisions (2026-09-30):
 - Region **Central US** (owner decision 2026-10-01; originally East US 2, where PostgreSQL Flexible Server is offer-restricted for this subscription in East US 2).
 - **Time-boxed production-parity staging**: ephemeral and IaC-controlled.
 - A **persistent AI learning plane**, independent of staging.
-- **Staging-only** relaxation of the start guard; production stays refused in code.
+- Start guard on the bridge topology for staging and production. Production remains gated behind the approved production-bridge acceptance process. No final production cutover occurs until the required bridge/security/E2E gates pass and the production deployment is explicitly authorized.
 - Tooling (Azure CLI, Bicep, Docker) may be installed.
 - **No Azure resource is created, changed or purchased without separate explicit approval of that specific action.**
 

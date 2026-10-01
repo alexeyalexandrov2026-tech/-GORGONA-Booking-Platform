@@ -1,3 +1,6 @@
+import { accessToken } from "./auth";
+import { managementResponseSchema } from "./management-contracts";
+import { availabilitySchema, Availability } from "./contracts";
 /**
  * GORGONA Management API Client.
  * Communicates with /v1 authenticated staff routes with real PostgreSQL persistence.
@@ -168,34 +171,19 @@ export class ManagementApiError extends Error {
   }
 }
 
-const TOKEN_KEY = "gorgona_staff_token";
 const ACTIVE_SALON_KEY = "gorgona_active_salon";
-
-export function getStaffToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setStaffToken(token: string | null): void {
-  if (typeof window === "undefined") return;
-  if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
-  } else {
-    localStorage.removeItem(TOKEN_KEY);
-  }
-}
 
 export function getActiveSalonId(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(ACTIVE_SALON_KEY);
+  return sessionStorage.getItem(ACTIVE_SALON_KEY);
 }
 
 export function setActiveSalonId(salonId: string | null): void {
   if (typeof window === "undefined") return;
   if (salonId) {
-    localStorage.setItem(ACTIVE_SALON_KEY, salonId);
+    sessionStorage.setItem(ACTIVE_SALON_KEY, salonId);
   } else {
-    localStorage.removeItem(ACTIVE_SALON_KEY);
+    sessionStorage.removeItem(ACTIVE_SALON_KEY);
   }
 }
 
@@ -203,7 +191,17 @@ export async function managementFetch<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
-  const token = getStaffToken();
+  if (!/^\/v1\/(me$|salons\/[0-9a-f-]{36}(?:\/|\?|$))/i.test(path))
+    throw new ManagementApiError(
+      "INVALID_REQUEST",
+      "Invalid management request.",
+    );
+  const token = await accessToken();
+  if (!token)
+    throw new ManagementApiError(
+      "AUTHENTICATION_REQUIRED",
+      "Your session expired. Please sign in again.",
+    );
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options?.headers as Record<string, string>),
@@ -213,10 +211,23 @@ export async function managementFetch<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(path, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers,
+      cache: "no-store",
+      credentials: "omit",
+      signal: options?.signal
+        ? AbortSignal.any([options.signal, AbortSignal.timeout(15000)])
+        : AbortSignal.timeout(15000),
+    });
+  } catch {
+    throw new ManagementApiError(
+      "NETWORK_ERROR",
+      "We couldn’t reach the studio. Retry safely to check whether the request arrived.",
+    );
+  }
 
   const text = await response.text();
   let data: unknown;
@@ -251,11 +262,39 @@ export async function managementFetch<T>(
     }
     throw new ManagementApiError(
       "UNKNOWN_ERROR",
-      `Server returned ${response.status}: ${text || response.statusText}`,
+      "The studio service is temporarily unavailable. Please try again.",
     );
   }
 
-  return data as T;
+  const parsed = managementResponseSchema(
+    path,
+    options?.method ?? "GET",
+  ).safeParse(data);
+  if (!parsed.success)
+    throw new ManagementApiError(
+      "INVALID_RESPONSE",
+      "The studio service returned incomplete information. Please retry.",
+    );
+  return parsed.data as T;
+}
+
+const pendingMutations = new Map<string, string>();
+async function bookingMutation<T>(path: string, payload: unknown): Promise<T> {
+  const body = JSON.stringify(payload);
+  const signature = `${path}:${body}`;
+  let key = pendingMutations.get(signature);
+  if (!key) {
+    key = crypto.randomUUID();
+    pendingMutations.set(signature, key);
+  }
+  // Keep the key after timeout/response loss. A safe retry must replay the same operation.
+  const result = await managementFetch<T>(path, {
+    method: "POST",
+    body,
+    headers: { "Idempotency-Key": key },
+  });
+  pendingMutations.delete(signature);
+  return result;
 }
 
 // --- Specific API Calls ---
@@ -275,6 +314,8 @@ export async function fetchBookings(
     endDate?: string;
     resourceId?: string;
     status?: string;
+    localDay?: string;
+    locationId?: string;
   },
 ): Promise<BookingSummary[]> {
   const query = new URLSearchParams();
@@ -282,6 +323,8 @@ export async function fetchBookings(
   if (params?.endDate) query.set("end_date", params.endDate);
   if (params?.resourceId) query.set("resource_id", params.resourceId);
   if (params?.status) query.set("status", params.status);
+  if (params?.localDay) query.set("local_day", params.localDay);
+  if (params?.locationId) query.set("location_id", params.locationId);
   const qStr = query.toString();
   return managementFetch<BookingSummary[]>(
     `/v1/salons/${salonId}/bookings${qStr ? `?${qStr}` : ""}`,
@@ -301,10 +344,10 @@ export async function createStaffBooking(
     add_on_ids?: string[];
   },
 ): Promise<BookingSummary> {
-  return managementFetch<BookingSummary>(`/v1/salons/${salonId}/bookings`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+  return bookingMutation<BookingSummary>(
+    `/v1/salons/${salonId}/bookings`,
+    data,
+  );
 }
 
 export async function rescheduleBooking(
@@ -315,12 +358,9 @@ export async function rescheduleBooking(
     new_resource_id?: string;
   },
 ): Promise<BookingSummary> {
-  return managementFetch<BookingSummary>(
+  return bookingMutation<BookingSummary>(
     `/v1/salons/${salonId}/bookings/${bookingId}/reschedule`,
-    {
-      method: "POST",
-      body: JSON.stringify(data),
-    },
+    data,
   );
 }
 
@@ -329,12 +369,9 @@ export async function cancelBooking(
   bookingId: string,
   reason: string = "Cancelled by staff",
 ): Promise<BookingSummary> {
-  return managementFetch<BookingSummary>(
+  return bookingMutation<BookingSummary>(
     `/v1/salons/${salonId}/bookings/${bookingId}/cancel`,
-    {
-      method: "POST",
-      body: JSON.stringify({ reason }),
-    },
+    { reason },
   );
 }
 
@@ -505,6 +542,68 @@ export async function fetchSettings(salonId: string): Promise<SalonSettings> {
   return managementFetch<SalonSettings>(`/v1/salons/${salonId}/settings`);
 }
 
+export async function fetchManagementAvailability(
+  salonId: string,
+  data: {
+    location_id: string;
+    variant_id: string;
+    resource_id: string | null;
+    add_on_ids: string[];
+    day: string;
+    booking_id?: string;
+  },
+  signal?: AbortSignal,
+): Promise<Availability> {
+  const result = await managementFetch<Availability>(
+    `/v1/salons/${salonId}/availability`,
+    { method: "POST", body: JSON.stringify(data), signal },
+  );
+  return availabilitySchema.parse(result);
+}
+
+export async function savePolicies(
+  salonId: string,
+  payload: {
+    booking_rules: {
+      version: 1;
+      slot_interval_minutes: number;
+      advance_notice_minutes: number;
+      max_days_ahead: number;
+    };
+    deposit_policy: { version: 1; required: boolean };
+    cancellation_policy: { version: 1; summary: string };
+  },
+): Promise<unknown> {
+  return managementFetch(`/v1/salons/${salonId}/policies`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+export async function saveBusinessHours(
+  salonId: string,
+  locationId: string,
+  hours: { weekday: number; opens: string; closes: string }[],
+): Promise<unknown> {
+  return managementFetch(`/v1/salons/${salonId}/business-hours`, {
+    method: "PUT",
+    body: JSON.stringify({ location_id: locationId, hours }),
+  });
+}
+export async function saveFact(
+  salonId: string,
+  key: string,
+  status: "confirmed" | "unconfirmed",
+  sourceNote: string,
+): Promise<unknown> {
+  return managementFetch(
+    `/v1/salons/${salonId}/facts/${encodeURIComponent(key)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ status, source_note: sourceNote }),
+    },
+  );
+}
+
 export function formatPrice(cents: number, currency: string = "USD"): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -512,17 +611,29 @@ export function formatPrice(cents: number, currency: string = "USD"): string {
   }).format(cents / 100);
 }
 
-export function formatTime(isoString: string): string {
+export function formatTime(
+  isoString: string,
+  timezone: string = "UTC",
+): string {
   const d = new Date(isoString);
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+    timeZoneName: "short",
+  });
 }
 
-export function formatDate(isoString: string): string {
+export function formatDate(
+  isoString: string,
+  timezone: string = "UTC",
+): string {
   const d = new Date(isoString);
   return d.toLocaleDateString([], {
     weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: timezone,
   });
 }

@@ -22,6 +22,39 @@ Customers, salon staff and platform operators reach GORGONA only through Front D
                           GORGONA AI learning plane (Azure, persistent)
 ```
 
+## 1a. Production bridge (the path to production)
+
+Production is **gated, not abandoned**. The intended production path is:
+
+```
+KA Nails / GORGONA Booking public frontend
+  → optional Cloudflare edge (public frontend delivery only; no backend, no booking logic, no data)
+  → Azure Front Door Premium → WAF / security policies (managed rules, bot rules, rate limits)
+  → Private Link → private Azure Container Apps (environment public network access disabled)
+  → GORGONA API / domain services → private Azure PostgreSQL 18 (authoritative system of record)
+```
+
+- There is **one authoritative booking/domain system**. The GORGONA dashboard/admin uses the same API and the same PostgreSQL data plane. There is no duplicate Cloudflare backend, booking engine or booking database.
+- Azure owns the backend/API, authentication and RBAC, tenant isolation, the booking engine, calendar, services, staff, clients, availability, notifications, PostgreSQL, application compute, private networking, managed identity and observability.
+- PostgreSQL remains the relational system of record. Cosmos DB is not used for booking/domain data unless a future architecture decision introduces it for a suitable non-relational workload.
+- **The staging environment is the production-parity bridge.** Production is reached through an already-tested, production-equivalent path. It uses the same `main-platform.bicep` topology and the same accepted image digest, and it is never redesigned after staging.
+- **Bridge acceptance gates**, evidenced per image digest by `api/tools/bridge_acceptance.py` (see [`BRIDGE_ACCEPTANCE.md`](../plan/BRIDGE_ACCEPTANCE.md)):
+  - real Azure end-to-end execution;
+  - authentication/OIDC;
+  - the trusted Front Door boundary;
+  - WAF and rate limiting;
+  - Private Link and a private origin;
+  - private PostgreSQL;
+  - tenant isolation;
+  - CSP `frame-ancestors`;
+  - the authorized KA Nails origin;
+  - direct-origin bypass negative tests;
+  - secrets and managed identity;
+  - monitoring;
+  - rollback/recovery.
+- Production remains gated behind the approved production-bridge acceptance process. No final production cutover occurs until the required bridge/security/E2E gates pass and the production deployment is explicitly authorized.
+- **Compute placement.** The Central US Container Apps capacity failure (2026-10-01) is a compute-placement/capacity problem, not an architecture change. The bridge keeps this exact security topology wherever its compute is placed. The West US 3 **AI jobs** environment (`main-ai-jobs.bicep`) is a separate jobs-compute plane of the AI learning plane. It is not the production bridge and does not replace it.
+
 ## 2. Resource topology
 
 ```
@@ -131,7 +164,7 @@ commit → CI (ruff, mypy, pytest+PG+Chromium, web checks, separation/secret che
        → canary 10% → observe → 100% ; previous revision kept for rollback
 ```
 
-- Implemented as dormant workflows: `.github/workflows/deploy-staging.yml` (manual, `staging` environment approval, OIDC, digest-pinned scanner, migrate -> revision -> Front Door smoke -> automatic traffic rollback) and `promote-production.yml` (refuses: production is not authorized). CI (`ci.yml`) builds and runs the production image on every push.
+- Implemented as dormant workflows: `.github/workflows/deploy-staging.yml` (manual, `staging` environment approval, OIDC, digest-pinned scanner, migrate -> revision -> Front Door smoke -> automatic traffic rollback) and `promote-production.yml` (gated: it verifies bridge acceptance evidence for the exact digest and an owner authorization record; the cutover job stays disabled until production is explicitly authorized). CI (`ci.yml`) builds and runs the production image on every push.
 - Rollback means shifting traffic back to the previous revision; images are immutable by digest.
 - Migrations are forward-only and additive. A failed migration stops the pipeline before any revision changes.
 

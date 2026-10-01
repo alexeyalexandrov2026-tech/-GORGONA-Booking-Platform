@@ -1,0 +1,777 @@
+diff --git a/ai/src/gorgona_ai/cli.py b/ai/src/gorgona_ai/cli.py
+index 6d4f4a8..ddc61af 100644
+--- a/ai/src/gorgona_ai/cli.py
++++ b/ai/src/gorgona_ai/cli.py
+@@ -5,11 +5,13 @@ Job entrypoints (Container Apps Jobs):
+   pump-evidence  event-driven: Service Bus -> durable ingest runs, then drain ingest
+   run            drain due runs (optionally only some kinds)
+   health         exit 1 when unhealthy
++  netcheck       DNS/TCP preflight of the environment's dependencies (no database)
+ Operator commands: bootstrap, migrate, review, promote, rollback, search.
+ 
+ Configuration (environment): GAI_DATABASE_URL (worker role), GAI_MIGRATION_DATABASE_URL
+ (owner), GAI_ADMIN_DATABASE_URL + GAI_OWNER_PASSWORD + GAI_WORKER_PASSWORD (bootstrap),
+-GAI_DATABASE_NAME, GAI_SERVICEBUS_NAMESPACE, GAI_EVIDENCE_QUEUE, AZURE_CLIENT_ID.
++GAI_DATABASE_NAME, GAI_SERVICEBUS_NAMESPACE, GAI_EVIDENCE_QUEUE, AZURE_CLIENT_ID,
++GAI_NETCHECK_TARGETS + GAI_NETCHECK_SECRETS (netcheck).
+ """
+ 
+ import argparse
+@@ -22,7 +24,7 @@ from uuid import UUID
+ 
+ import psycopg
+ 
+-from gorgona_ai import db, evidence, pipeline
++from gorgona_ai import db, evidence, netcheck, pipeline
+ from gorgona_ai.intake import ServiceBusSource, pump
+ from gorgona_ai.jobs.runtime import drain
+ from gorgona_ai.observability import configure_logging, health
+@@ -48,6 +50,7 @@ def main(argv: Sequence[str] | None = None) -> int:
+     sub = parser.add_subparsers(dest="command", required=True)
+     sub.add_parser("bootstrap")
+     sub.add_parser("migrate")
++    sub.add_parser("netcheck")
+     sub.add_parser("tick")
+     sub.add_parser("pump-evidence")
+     run = sub.add_parser("run")
+@@ -87,6 +90,13 @@ def main(argv: Sequence[str] | None = None) -> int:
+         applied = db.migrate(_env("GAI_MIGRATION_DATABASE_URL"))
+         print("applied: " + (", ".join(applied) if applied else "nothing to apply"))
+         return 0
++    if args.command == "netcheck":
++        secrets = [n for n in os.environ.get("GAI_NETCHECK_SECRETS", "").split(",") if n]
++        report = netcheck.check(
++            netcheck.parse_targets(_env("GAI_NETCHECK_TARGETS")), os.environ, secrets
++        )
++        print(json.dumps(report))
++        return 0 if report["ok"] else 1
+     with _connect() as conn:
+         if args.command == "tick":
+             pipeline.schedule_periodic(conn)
+diff --git a/ai/src/gorgona_ai/netcheck.py b/ai/src/gorgona_ai/netcheck.py
+new file mode 100644
+index 0000000..3c9d32d
+--- /dev/null
++++ b/ai/src/gorgona_ai/netcheck.py
+@@ -0,0 +1,82 @@
++"""Network preflight for a jobs environment: DNS + TCP to every dependency.
++
++Each target is `host:port:expect`, where expect is `private` (the name must resolve
++only to private addresses, i.e. through a linked private DNS zone to a private
++endpoint; a public answer fails, so there is no silent public fallback) or `public`
++(a dependency that is reached on its public endpoint by design, reported as such).
++Required secret variables are checked for presence only; values are never read out.
++"""
++
++import ipaddress
++import socket
++from collections.abc import Callable, Iterable, Mapping
++from dataclasses import dataclass
++from typing import Any, Literal
++
++type Expect = Literal["private", "public"]
++type Resolver = Callable[[str, int], list[str]]
++type Connector = Callable[[str, int, float], None]
++
++
++@dataclass(frozen=True, slots=True)
++class Target:
++    host: str
++    port: int
++    expect: Expect
++
++
++def parse_targets(spec: str) -> list[Target]:
++    targets = []
++    for item in filter(None, (part.strip() for part in spec.split(","))):
++        host, port, expect = item.rsplit(":", 2)
++        if expect not in ("private", "public") or not host:
++            raise ValueError(f"bad target {item!r}: use host:port:private|public")
++        targets.append(Target(host, int(port), expect))  # type: ignore[arg-type]
++    return targets
++
++
++def _resolve(host: str, port: int) -> list[str]:
++    infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
++    return sorted({str(info[4][0]) for info in infos})
++
++
++def _connect(address: str, port: int, timeout: float) -> None:
++    with socket.create_connection((address, port), timeout=timeout):
++        pass
++
++
++def check(
++    targets: Iterable[Target],
++    environ: Mapping[str, str],
++    required_secrets: Iterable[str] = (),
++    *,
++    resolve: Resolver = _resolve,
++    connect: Connector = _connect,
++    timeout: float = 5.0,
++) -> dict[str, Any]:
++    results: list[dict[str, Any]] = []
++    for t in targets:
++        row: dict[str, Any] = {"host": t.host, "port": t.port, "expect": t.expect}
++        try:
++            addresses = resolve(t.host, t.port)
++        except OSError as exc:
++            results.append({**row, "ok": False, "error": f"dns: {type(exc).__name__}"})
++            continue
++        private = [ipaddress.ip_address(a).is_private for a in addresses]
++        row["addresses"] = addresses
++        row["resolved"] = "private" if all(private) else "public" if not any(private) else "mixed"
++        if t.expect == "private" and row["resolved"] != "private":
++            results.append({**row, "ok": False, "error": "resolved to a non-private address"})
++            continue
++        try:
++            connect(addresses[0], t.port, timeout)
++        except OSError as exc:
++            results.append({**row, "ok": False, "error": f"tcp: {type(exc).__name__}"})
++            continue
++        results.append({**row, "ok": True})
++    secrets = {name: bool(environ.get(name)) for name in required_secrets}
++    return {
++        "ok": all(r["ok"] for r in results) and all(secrets.values()),
++        "targets": results,
++        "secrets_present": secrets,
++    }
+diff --git a/ai/tests/test_netcheck.py b/ai/tests/test_netcheck.py
+new file mode 100644
+index 0000000..9e78daa
+--- /dev/null
++++ b/ai/tests/test_netcheck.py
+@@ -0,0 +1,72 @@
++"""Network preflight logic with injected DNS/TCP (no network)."""
++
++import pytest
++
++from gorgona_ai.netcheck import Target, check, parse_targets
++
++
++def _resolver(table: dict[str, list[str]]):  # type: ignore[no-untyped-def]
++    def resolve(host: str, port: int) -> list[str]:
++        if host not in table:
++            raise OSError("NXDOMAIN")
++        return table[host]
++
++    return resolve
++
++
++def _ok(address: str, port: int, timeout: float) -> None:
++    return None
++
++
++def test_parse_targets() -> None:
++    assert parse_targets("db.example:5432:private, sb.example:5671:public") == [
++        Target("db.example", 5432, "private"),
++        Target("sb.example", 5671, "public"),
++    ]
++    with pytest.raises(ValueError, match="bad target"):
++        parse_targets("db.example:5432:maybe")
++
++
++def test_private_target_resolving_publicly_fails_closed() -> None:
++    report = check(
++        [Target("db.example", 5432, "private")],
++        {},
++        resolve=_resolver({"db.example": ["20.1.2.3"]}),
++        connect=_ok,
++    )
++    assert report["ok"] is False
++    assert report["targets"][0]["resolved"] == "public"
++    assert "non-private" in report["targets"][0]["error"]
++
++
++def test_all_dependencies_reachable_and_secret_presence_only() -> None:
++    env = {"GAI_DATABASE_URL": "postgresql://user:SECRETVALUE@db/x"}
++    report = check(
++        [Target("db.example", 5432, "private"), Target("sb.example", 5671, "public")],
++        env,
++        ["GAI_DATABASE_URL"],
++        resolve=_resolver({"db.example": ["10.30.2.4"], "sb.example": ["20.1.2.3"]}),
++        connect=_ok,
++    )
++    assert report["ok"] is True
++    assert report["secrets_present"] == {"GAI_DATABASE_URL": True}
++    assert "SECRETVALUE" not in str(report)
++
++
++def test_dns_tcp_and_missing_secret_failures_are_reported() -> None:
++    def refuse(address: str, port: int, timeout: float) -> None:
++        raise ConnectionRefusedError
++
++    report = check(
++        [Target("gone.example", 443, "private"), Target("kv.example", 443, "private")],
++        {},
++        ["GAI_DATABASE_URL"],
++        resolve=_resolver({"kv.example": ["10.30.2.5"]}),
++        connect=refuse,
++    )
++    assert report["ok"] is False
++    assert [t["error"] for t in report["targets"]] == [
++        "dns: OSError",
++        "tcp: ConnectionRefusedError",
++    ]
++    assert report["secrets_present"] == {"GAI_DATABASE_URL": False}
+diff --git a/infra/azure/main-ai-jobs.bicep b/infra/azure/main-ai-jobs.bicep
+new file mode 100644
+index 0000000..cc225a3
+--- /dev/null
++++ b/infra/azure/main-ai-jobs.bicep
+@@ -0,0 +1,196 @@
++// AI jobs plane in its own region (owner decision 2026-10-01, Option A: Central US could
++// not provision a Container Apps environment - ManagedEnvironmentCapacityHeavyUsageError).
++// Only the Container Apps part of the AI plane (ADR-0013) lives here; the data plane
++// (AI PostgreSQL, evidence storage, Service Bus, Key Vaults, Azure ML, identities and
++// their role assignments) stays in Central US in stack `gorgona-ai` and is not modified.
++//
++// Stack `gorgona-ai-jobs`, applied in owner-approved steps:
++//   1. environment only     deployConnectivity=false, netcheckImage='', deployJobs=false
++//   2. private connectivity deployConnectivity=true  (+ netcheckImage: one manual probe job)
++//   3. the 5 AI jobs        deployJobs=true (needs aiWorkerImage)
++//
++// Connectivity: the jobs VNet is peered (both directions, no transit, no gateways) with
++// the Central US AI VNet, and the existing private DNS zones of the AI private endpoints
++// are linked to the jobs VNet, so Azure-provided DNS resolves them to private addresses.
++// No resolver, forwarder or public fallback: PostgreSQL, Key Vault and storage keep public
++// network access disabled. Service Bus (Basic) and the registry (Standard) have no private
++// endpoint at their tiers and are reached on their public endpoints with Entra auth only,
++// exactly as from Central US (see docs/plan/M4_REPORT.md).
++targetScope = 'subscription'
++
++@description('Region of the jobs plane (jobs_region).')
++param jobsLocation string
++
++@description('Name suffix of the Central US AI plane (GBA_UNIQUE_SUFFIX for centralus).')
++param uniqueSuffix string
++
++@description('Jobs VNet address plan; must not overlap 10.20/16 (staging), 10.30/16 (AI), 10.40/16 (production).')
++param addressPrefix string = '10.31.0.0/16'
++param acaSubnetPrefix string = '10.31.0.0/23'
++
++@description('Existing AI plane resource group and VNet (Central US).')
++param aiResourceGroupName string = 'rg-gorgona-ai'
++param aiVnetName string = 'vnet-gorgona-ai'
++
++@description('Shared resources (from main-shared outputs).')
++param acrLoginServer string
++param logAnalyticsWorkspaceId string
++
++@description('Step 2: VNet peering (both directions) and private DNS zone links.')
++param deployConnectivity bool = false
++
++@description('Step 2: image for the one-off network probe job (gorgona-ai@sha256:...); empty = no probe.')
++param netcheckImage string = ''
++
++@description('Step 3: deploy the 5 AI jobs (bootstrap, migrate, tick, health, intake).')
++param deployJobs bool = false
++
++@description('AI worker image by digest (gorgona-ai@sha256:...).')
++param aiWorkerImage string = ''
++
++var namePrefix = 'gorgona-ai'
++var tags = {
++  app: 'gorgona'
++  env: 'ai'
++  lifecycle: 'persistent'
++  managedBy: 'bicep-stack:gorgona-ai-jobs'
++}
++var dnsZones = [
++  'privatelink.postgres.database.azure.com'
++  'privatelink.vaultcore.azure.net'
++  'privatelink.blob.${environment().suffixes.storage}'
++]
++var vaultName = 'kv-gba-ai-${uniqueSuffix}'
++var serviceBusName = 'sb-${namePrefix}-${uniqueSuffix}'
++var netcheckTargets = join(
++  [
++    'psql-${namePrefix}-${uniqueSuffix}.postgres.database.azure.com:5432:private'
++    '${vaultName}${environment().suffixes.keyvaultDns}:443:private'
++    'stevid${uniqueSuffix}gba.blob.${environment().suffixes.storage}:443:private'
++    '${serviceBusName}.servicebus.windows.net:5671:public'
++    '${acrLoginServer}:443:public'
++  ],
++  ','
++)
++
++resource aiRg 'Microsoft.Resources/resourceGroups@2025-04-01' existing = {
++  name: aiResourceGroupName
++}
++
++resource aiVnet 'Microsoft.Network/virtualNetworks@2025-09-01' existing = {
++  scope: aiRg
++  name: aiVnetName
++}
++
++resource opsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
++  scope: aiRg
++  name: 'id-${namePrefix}-ops'
++}
++
++resource workerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
++  scope: aiRg
++  name: 'id-${namePrefix}-worker'
++}
++
++resource scalerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
++  scope: aiRg
++  name: 'id-${namePrefix}-scaler'
++}
++
++resource vault 'Microsoft.KeyVault/vaults@2026-02-01' existing = {
++  scope: aiRg
++  name: vaultName
++}
++
++resource rg 'Microsoft.Resources/resourceGroups@2025-04-01' = {
++  name: 'rg-gorgona-ai-jobs'
++  location: jobsLocation
++  tags: tags
++}
++
++module network 'modules/aca-vnet.bicep' = {
++  name: 'ai-jobs-network'
++  scope: rg
++  params: {
++    location: jobsLocation
++    name: 'vnet-${namePrefix}-jobs'
++    tags: tags
++    addressPrefix: addressPrefix
++    acaSubnetPrefix: acaSubnetPrefix
++  }
++}
++
++module jobsEnvironment 'modules/ai-jobs-environment.bicep' = {
++  name: 'ai-jobs-environment'
++  scope: rg
++  params: {
++    location: jobsLocation
++    namePrefix: namePrefix
++    name: 'cae-${namePrefix}-jobs'
++    tags: tags
++    infrastructureSubnetId: network.outputs.acaSubnetId
++    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
++  }
++}
++
++module peerJobsToAi 'modules/vnet-peering.bicep' = if (deployConnectivity) {
++  name: 'ai-jobs-peering-out'
++  scope: rg
++  params: { localVnetName: network.outputs.name, name: 'peer-ai-jobs-to-ai', remoteVnetId: aiVnet.id }
++}
++
++module peerAiToJobs 'modules/vnet-peering.bicep' = if (deployConnectivity) {
++  name: 'ai-jobs-peering-in'
++  scope: aiRg
++  params: { localVnetName: aiVnetName, name: 'peer-ai-to-ai-jobs', remoteVnetId: network.outputs.id }
++}
++
++module dnsLinks 'modules/private-dns-links.bicep' = if (deployConnectivity) {
++  name: 'ai-jobs-dns-links'
++  scope: aiRg
++  params: { zoneNames: dnsZones, linkName: 'link-${namePrefix}-jobs', vnetId: network.outputs.id, tags: tags }
++}
++
++module netcheck 'modules/ai-netcheck-job.bicep' = if (deployConnectivity && !empty(netcheckImage)) {
++  name: 'ai-jobs-netcheck'
++  scope: rg
++  params: {
++    location: jobsLocation
++    name: 'caj-${namePrefix}-netcheck'
++    tags: tags
++    environmentId: jobsEnvironment.outputs.id
++    image: netcheckImage
++    registryServer: acrLoginServer
++    workerIdentityId: workerIdentity.id
++    workerIdentityClientId: workerIdentity.properties.clientId
++    keyVaultUri: vault.properties.vaultUri
++    targets: netcheckTargets
++  }
++  dependsOn: [peerJobsToAi, peerAiToJobs, dnsLinks]
++}
++
++module workers 'modules/ai-jobs.bicep' = if (deployConnectivity && deployJobs && !empty(aiWorkerImage)) {
++  name: 'ai-jobs'
++  scope: rg
++  params: {
++    location: jobsLocation
++    namePrefix: namePrefix
++    tags: tags
++    environmentId: jobsEnvironment.outputs.id
++    image: aiWorkerImage
++    registryServer: acrLoginServer
++    opsIdentityId: opsIdentity.id
++    workerIdentityId: workerIdentity.id
++    workerIdentityClientId: workerIdentity.properties.clientId
++    scalerIdentityId: scalerIdentity.id
++    keyVaultUri: vault.properties.vaultUri
++    serviceBusNamespace: serviceBusName
++    evidenceQueue: 'evidence-events'
++  }
++  dependsOn: [peerJobsToAi, peerAiToJobs, dnsLinks]
++}
++
++output resourceGroupName string = rg.name
++output environmentId string = jobsEnvironment.outputs.id
++output netcheckJobName string = (deployConnectivity && !empty(netcheckImage)) ? netcheck!.outputs.name : ''
++output aiJobNames array = (deployConnectivity && deployJobs && !empty(aiWorkerImage)) ? workers!.outputs.jobNames : []
+diff --git a/infra/azure/modules/aca-vnet.bicep b/infra/azure/modules/aca-vnet.bicep
+new file mode 100644
+index 0000000..234f313
+--- /dev/null
++++ b/infra/azure/modules/aca-vnet.bicep
+@@ -0,0 +1,43 @@
++// VNet holding only a delegated Container Apps infrastructure subnet (no private
++// endpoints of its own): workloads reach private endpoints in a peered VNet.
++@description('Azure region.')
++param location string
++
++@description('VNet name.')
++param name string
++
++@description('Resource tags.')
++param tags object
++
++@description('VNet address space. Must not overlap any peered or platform VNet.')
++param addressPrefix string
++
++@description('Container Apps infrastructure subnet (workload profiles: /27 minimum).')
++param acaSubnetPrefix string
++
++resource vnet 'Microsoft.Network/virtualNetworks@2025-09-01' = {
++  name: name
++  location: location
++  tags: tags
++  properties: {
++    addressSpace: { addressPrefixes: [addressPrefix] }
++    subnets: [
++      {
++        name: 'snet-aca'
++        properties: {
++          addressPrefix: acaSubnetPrefix
++          delegations: [
++            {
++              name: 'aca'
++              properties: { serviceName: 'Microsoft.App/environments' }
++            }
++          ]
++        }
++      }
++    ]
++  }
++}
++
++output id string = vnet.id
++output name string = vnet.name
++output acaSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', vnet.name, 'snet-aca')
+diff --git a/infra/azure/modules/ai-jobs-environment.bicep b/infra/azure/modules/ai-jobs-environment.bicep
+index 7ad634e..3f93760 100644
+--- a/infra/azure/modules/ai-jobs-environment.bicep
++++ b/infra/azure/modules/ai-jobs-environment.bicep
+@@ -1,12 +1,16 @@
+ // Consumption-only Container Apps environment for the AI-plane jobs (ai-jobs.bicep).
+-// Internal (AI VNet only); it reaches the AI database, vault and evidence store through
+-// their private endpoints. Logs go to the shared Log Analytics workspace.
++// Internal (VNet only, no ingress, no inbound private endpoint); it reaches the AI
++// database, vault and evidence store through their private endpoints (directly or over
++// VNet peering). Logs go to the shared Log Analytics workspace.
+ @description('Azure region.')
+ param location string
+ 
+ @description('Name prefix.')
+ param namePrefix string
+ 
++@description('Environment name (default cae-<namePrefix>).')
++param name string = 'cae-${namePrefix}'
++
+ @description('Resource tags.')
+ param tags object
+ 
+@@ -17,7 +21,7 @@ param infrastructureSubnetId string
+ param logAnalyticsWorkspaceId string
+ 
+ resource environment 'Microsoft.App/managedEnvironments@2026-01-01' = {
+-  name: 'cae-${namePrefix}'
++  name: name
+   location: location
+   tags: tags
+   properties: {
+diff --git a/infra/azure/modules/ai-netcheck-job.bicep b/infra/azure/modules/ai-netcheck-job.bicep
+new file mode 100644
+index 0000000..03a159b
+--- /dev/null
++++ b/infra/azure/modules/ai-netcheck-job.bicep
+@@ -0,0 +1,80 @@
++// Manual probe job (`gba-ai netcheck`) that proves, from inside a jobs environment, that
++// every dependency resolves and connects as designed: private-endpoint names resolve to
++// private addresses through the linked zones (a public answer fails the run, so there is
++// no silent public fallback), TCP connects, the registry pull works (the job starts at
++// all), and the platform fetched the worker's Key Vault-referenced secret (presence only;
++// the value is never printed). Runs as the worker identity; it reads nothing else.
++@description('Azure region.')
++param location string
++
++@description('Job name.')
++param name string
++
++@description('Resource tags.')
++param tags object
++
++@description('Container Apps environment ID.')
++param environmentId string
++
++@description('Image by digest.')
++param image string
++
++@description('Registry login server.')
++param registryServer string
++
++@description('Worker identity resource ID and client ID.')
++param workerIdentityId string
++param workerIdentityClientId string
++
++@description('Vault URI (https://<name>.vault.azure.net/).')
++param keyVaultUri string
++
++@description('Targets, host:port:private|public, comma separated.')
++param targets string
++
++resource job 'Microsoft.App/jobs@2026-01-01' = {
++  name: name
++  location: location
++  tags: tags
++  identity: {
++    type: 'UserAssigned'
++    userAssignedIdentities: { '${workerIdentityId}': {} }
++  }
++  properties: {
++    environmentId: environmentId
++    workloadProfileName: 'Consumption'
++    configuration: {
++      identitySettings: [{ identity: workerIdentityId, lifecycle: 'All' }]
++      triggerType: 'Manual'
++      replicaTimeout: 300
++      replicaRetryLimit: 0
++      manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
++      registries: [{ server: registryServer, identity: workerIdentityId }]
++      secrets: [
++        {
++          name: 'ai-database-url'
++          keyVaultUrl: '${keyVaultUri}secrets/ai-database-url'
++          identity: workerIdentityId
++        }
++      ]
++    }
++    template: {
++      containers: [
++        {
++          name: 'netcheck'
++          image: image
++          args: ['netcheck']
++          resources: { cpu: json('0.25'), memory: '0.5Gi' }
++          env: [
++            { name: 'GAI_DATABASE_URL', secretRef: 'ai-database-url' }
++            { name: 'AZURE_CLIENT_ID', value: workerIdentityClientId }
++            { name: 'GAI_NETCHECK_TARGETS', value: targets }
++            { name: 'GAI_NETCHECK_SECRETS', value: 'GAI_DATABASE_URL' }
++          ]
++        }
++      ]
++    }
++  }
++}
++
++output name string = job.name
+diff --git a/infra/azure/modules/private-dns-links.bicep b/infra/azure/modules/private-dns-links.bicep
+new file mode 100644
+index 0000000..7455a28
+--- /dev/null
++++ b/infra/azure/modules/private-dns-links.bicep
+@@ -0,0 +1,29 @@
++// Link existing private DNS zones (in this module scope) to another VNet so that VNet
++// resolves the zones' private-endpoint records. Azure-provided DNS honours linked zones,
++// so no resolver or forwarder is needed. No auto-registration.
++@description('Existing private DNS zone names.')
++param zoneNames array
++
++@description('Link name.')
++param linkName string
++
++@description('VNet to link (any region).')
++param vnetId string
++
++@description('Resource tags.')
++param tags object
++
++resource zones 'Microsoft.Network/privateDnsZones@2024-06-01' existing = [for zone in zoneNames: { name: zone }]
++
++resource links 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = [
++  for (zone, i) in zoneNames: {
++    parent: zones[i]
++    name: linkName
++    location: 'global'
++    tags: tags
++    properties: {
++      registrationEnabled: false
++      virtualNetwork: { id: vnetId }
++    }
++  }
++]
+diff --git a/infra/azure/modules/vnet-peering.bicep b/infra/azure/modules/vnet-peering.bicep
+new file mode 100644
+index 0000000..613a862
+--- /dev/null
++++ b/infra/azure/modules/vnet-peering.bicep
+@@ -0,0 +1,28 @@
++// One direction of a VNet peering (deploy once per side). Private traffic only: no
++// gateway transit and no forwarded traffic, so neither VNet becomes a transit path.
++@description('Name of the local VNet (in this module scope).')
++param localVnetName string
++
++@description('Peering name.')
++param name string
++
++@description('Resource ID of the remote VNet (any region).')
++param remoteVnetId string
++
++resource local 'Microsoft.Network/virtualNetworks@2025-09-01' existing = {
++  name: localVnetName
++}
++
++resource peering 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2025-09-01' = {
++  parent: local
++  name: name
++  properties: {
++    remoteVirtualNetwork: { id: remoteVnetId }
++    allowVirtualNetworkAccess: true
++    allowForwardedTraffic: false
++    allowGatewayTransit: false
++    useRemoteGateways: false
++  }
++}
++
++output id string = peering.id
+diff --git a/infra/azure/params/ai-jobs.bicepparam b/infra/azure/params/ai-jobs.bicepparam
+new file mode 100644
+index 0000000..1bf4216
+--- /dev/null
++++ b/infra/azure/params/ai-jobs.bicepparam
+@@ -0,0 +1,18 @@
++// AI jobs plane (Option A, owner decision 2026-10-01). No secrets: jobs read theirs from
++// the Central US AI Key Vault at run time through their managed identities.
++using '../main-ai-jobs.bicep'
++
++// jobs_region. Read-only preflight 2026-10-01: PostgreSQL 18, zone-redundant HA, Front
++// Door Private Link, availability zones, D4ds_v5 and ML quota all pass; Container Apps
++// capacity can only be proven by creating the environment (step 1).
++param jobsLocation = 'westus3'
++param uniqueSuffix = readEnvironmentVariable('GBA_UNIQUE_SUFFIX')
++param addressPrefix = '10.31.0.0/16'
++param acaSubnetPrefix = '10.31.0.0/23'
++param acrLoginServer = readEnvironmentVariable('GBA_ACR_LOGIN_SERVER')
++param logAnalyticsWorkspaceId = readEnvironmentVariable('GBA_LOG_WORKSPACE_ID')
++// Owner-approved steps, in order (see main-ai-jobs.bicep). Each is a separate approval.
++param deployConnectivity = bool(readEnvironmentVariable('GBA_AI_JOBS_CONNECTIVITY', 'false'))
++param netcheckImage = readEnvironmentVariable('GBA_AI_NETCHECK_IMAGE', '')
++param deployJobs = bool(readEnvironmentVariable('GBA_AI_JOBS_DEPLOY', 'false'))
++param aiWorkerImage = readEnvironmentVariable('GBA_AI_IMAGE', '')
+diff --git a/infra/azure/params/ai.create.bicepparam b/infra/azure/params/ai.create.bicepparam
+index d657110..4233430 100644
+--- a/infra/azure/params/ai.create.bicepparam
++++ b/infra/azure/params/ai.create.bicepparam
+@@ -15,9 +15,13 @@ param operatorPrincipalId = readEnvironmentVariable('GBA_OPERATOR_OBJECT_ID')
+ param deployGpuCluster = false
+ // Azure ML quota read 2026-10-01 (centralus): standardDDSv5Family 4 vCPUs; D4ds_v5 has 4.
+ param cpuMaxNodes = 1
+-// Dedicated AI jobs environment (ADR-0013). Container Apps environment quota is 20 per
+-// region since the pay-as-you-go upgrade (read 2026-10-01).
+-param deployJobsEnvironment = true
++// The dedicated AI jobs environment (ADR-0013) moved to stack gorgona-ai-jobs
++// (main-ai-jobs.bicep, jobs_region westus3): Central US refused new Container Apps
++// environments twice on 2026-10-01 (ManagedEnvironmentCapacityHeavyUsageError). Never
++// true here again without an owner decision: it would retry the Central US environment.
++// On the next gorgona-ai update the failed cae-gorgona-ai is DETACHED (detachAll), not
++// deleted; deleting it is a separate owner approval.
++param deployJobsEnvironment = false
+ param lockResourceGroup = true
+ param postgresAdminPassword = readEnvironmentVariable('GBA_AI_PG_ADMIN_PASSWORD')
+ param ownerRolePassword = readEnvironmentVariable('GBA_AI_OWNER_ROLE_PASSWORD')
+diff --git a/infra/azure/params/ai.update.bicepparam b/infra/azure/params/ai.update.bicepparam
+index 5580077..c01b1a9 100644
+--- a/infra/azure/params/ai.update.bicepparam
++++ b/infra/azure/params/ai.update.bicepparam
+@@ -15,9 +15,13 @@ param operatorPrincipalId = readEnvironmentVariable('GBA_OPERATOR_OBJECT_ID')
+ param deployGpuCluster = false
+ // Azure ML quota read 2026-10-01 (centralus): standardDDSv5Family 4 vCPUs; D4ds_v5 has 4.
+ param cpuMaxNodes = 1
+-// Dedicated AI jobs environment (ADR-0013). Container Apps environment quota is 20 per
+-// region since the pay-as-you-go upgrade (read 2026-10-01).
+-param deployJobsEnvironment = true
++// The dedicated AI jobs environment (ADR-0013) moved to stack gorgona-ai-jobs
++// (main-ai-jobs.bicep, jobs_region westus3): Central US refused new Container Apps
++// environments twice on 2026-10-01 (ManagedEnvironmentCapacityHeavyUsageError). Never
++// true here again without an owner decision: it would retry the Central US environment.
++// On the next gorgona-ai update the failed cae-gorgona-ai is DETACHED (detachAll), not
++// deleted; deleting it is a separate owner approval.
++param deployJobsEnvironment = false
+ param lockResourceGroup = true
+ param postgresAdminPassword = az.getSecret(readEnvironmentVariable('GBA_SUBSCRIPTION_ID'), 'rg-gorgona-ai', readEnvironmentVariable('GBA_AI_KV_NAME'), 'ai-postgres-admin-password')
+ param ownerRolePassword = az.getSecret(readEnvironmentVariable('GBA_SUBSCRIPTION_ID'), 'rg-gorgona-ai', readEnvironmentVariable('GBA_AI_KV_NAME'), 'ai-owner-password')
+diff --git a/infra/azure/scripts/operator-env.ps1 b/infra/azure/scripts/operator-env.ps1
+index 60bb5c0..af4a5ae 100644
+--- a/infra/azure/scripts/operator-env.ps1
++++ b/infra/azure/scripts/operator-env.ps1
+@@ -27,7 +27,7 @@
+ #>
+ [CmdletBinding()]
+ param(
+-    [ValidateSet('budgets', 'shared', 'ai', 'staging')] [string] $Stage = 'budgets',
++    [ValidateSet('budgets', 'shared', 'ai', 'ai-jobs', 'staging')] [string] $Stage = 'budgets',
+     [int] $BudgetAmount = 100,
+     [string] $BudgetStart = '2026-10-01',
+     [string] $Image,
+@@ -62,7 +62,7 @@ $set = [ordered]@{
+     GBA_PRODUCTION_KV_NAME  = "kv-gba-prd-$suffix"
+ }
+ 
+-if ($Stage -in @('ai', 'staging')) {
++if ($Stage -in @('ai', 'ai-jobs', 'staging')) {
+     $set.GBA_OPERATOR_OBJECT_ID = Get-AzValue @('ad', 'signed-in-user', 'show', '--query', 'id', '-o', 'tsv')
+     $outputs = Get-AzValue @('stack', 'sub', 'show', '--name', 'gorgona-shared', '--query', 'outputs', '-o', 'json') |
+         Out-String | ConvertFrom-Json
+diff --git a/infra/azure/scripts/stack-up.ps1 b/infra/azure/scripts/stack-up.ps1
+index 56545c7..c6a1a8b 100644
+--- a/infra/azure/scripts/stack-up.ps1
++++ b/infra/azure/scripts/stack-up.ps1
+@@ -1,6 +1,6 @@
+ <#
+ .SYNOPSIS
+-  Create or update one GORGONA deployment stack (budgets | shared | ai | staging | production).
++  Create or update one GORGONA deployment stack (budgets | shared | ai | ai-jobs | staging | production).
+ 
+ .DESCRIPTION
+   Without -Execute this prints the plan and the exact az commands and makes NO Azure
+@@ -20,7 +20,7 @@
+ #>
+ [CmdletBinding()]
+ param(
+-    [Parameter(Mandatory)] [ValidateSet('budgets', 'shared', 'ai', 'staging', 'production')] [string] $Stack,
++    [Parameter(Mandatory)] [ValidateSet('budgets', 'shared', 'ai', 'ai-jobs', 'staging', 'production')] [string] $Stack,
+     [ValidateSet('create', 'update')] [string] $Mode = 'create',
+     [switch] $Preview,
+     [switch] $Execute,
+@@ -35,11 +35,12 @@ $policy = @{
+     budgets    = @{ Template = 'main-budgets.bicep';  ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
+     shared     = @{ Template = 'main-shared.bicep';   ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
+     ai         = @{ Template = 'main-ai.bicep';       ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
++    'ai-jobs'  = @{ Template = 'main-ai-jobs.bicep';  ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
+     staging    = @{ Template = 'main-platform.bicep'; ActionOnUnmanage = 'deleteAll'; Deny = 'none' }
+     production = @{ Template = 'main-platform.bicep'; ActionOnUnmanage = 'detachAll'; Deny = 'denyDelete' }
+ }[$Stack]
+ 
+-$paramFile = if ($Stack -in @('budgets', 'shared')) { "$Stack.bicepparam" } else { "$Stack.$Mode.bicepparam" }
++$paramFile = if ($Stack -in @('budgets', 'shared', 'ai-jobs')) { "$Stack.bicepparam" } else { "$Stack.$Mode.bicepparam" }
+ $stackName = "gorgona-$Stack"
+ $secretVars = switch ($Stack) {
+     'ai'         { @('GBA_AI_PG_ADMIN_PASSWORD', 'GBA_AI_OWNER_ROLE_PASSWORD', 'GBA_AI_WORKER_ROLE_PASSWORD') }

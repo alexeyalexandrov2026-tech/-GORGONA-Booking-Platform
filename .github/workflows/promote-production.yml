@@ -1,26 +1,77 @@
-# Production promotion: NOT AUTHORIZED. This workflow exists so the release path is
-# reviewable, and it refuses to run. Production also refuses at process start
-# (config.assert_environment_allowed). Enabling it requires: staging acceptance evidence,
-# an owner decision recorded in docs/plan, a "production" GitHub environment with required
-# reviewers, and a change to this file that replaces the refusal with the gated steps below.
+# Production promotion: GATED behind the production-bridge acceptance process (ADR-0012).
 #
-# Intended gated steps (not implemented until authorized):
-#   1. promote the staging-accepted image digest (no rebuild);
-#   2. run the production migrate job; stop on failure;
-#   3. new revision at 0% traffic, labelled canary; smoke through Front Door;
+# Production is reached only through the topology already proven on the production-parity
+# staging bridge: Front Door Premium + WAF -> Private Link -> private Container Apps ->
+# GORGONA API -> private PostgreSQL 18. It is never redesigned after staging; the same
+# Bicep (main-platform.bicep) and the same accepted image digest are promoted.
+#
+# Gate 1 (this workflow, always): `tools/bridge_acceptance.py verify` must pass for the
+#   exact image digest. Evidence lives in docs/acceptance/<digest>/*.json (http, azure and
+#   drill records) and every required gate must be "pass": real Azure E2E booking, OIDC,
+#   trusted Front Door boundary, WAF/rate limiting, private origin, private PostgreSQL,
+#   tenant isolation, CSP frame-ancestors, the authorized KA Nails origin, direct-origin
+#   bypass refusal, secrets/managed identity, monitoring, rollback/recovery.
+# Gate 2: an owner authorization record docs/plan/production-authorizations/<id>.md
+#   naming the digest. Its id becomes GBA_PRODUCTION_AUTHORIZATION; without it the API
+#   refuses to start in production (config.assert_environment_allowed).
+# Gate 3: the "production" GitHub environment with required reviewers.
+#
+# Cutover steps run only after all three gates and are still disabled in this file
+# until the owner explicitly authorizes production (the final step below refuses):
+#   1. promote the accepted digest (no rebuild);
+#   2. production migrate job; stop on failure;
+#   3. new revision at 0% traffic (canary label); smoke through Front Door;
 #   4. canary 10% -> observe alerts -> 100%; keep the previous revision for rollback.
 name: promote-production
 
 on:
   workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Accepted image digest (sha256:...)
+        required: true
+      authorization_id:
+        description: Owner authorization record id (PA-YYYYMMDD-slug)
+        required: true
 
 permissions:
   contents: read
 
 jobs:
-  refuse:
+  bridge-gate:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - name: Verify bridge acceptance evidence for this digest
+        env:
+          DIGEST: ${{ github.event.inputs.image_digest }}
+        run: |
+          case "$DIGEST" in sha256:????????????????????????????????????????????????????????????????) ;;
+            *) echo "::error::image_digest must be sha256:<64 hex>"; exit 1;; esac
+          dir="../docs/acceptance/${DIGEST#sha256:}"
+          ls "$dir"/*.json >/dev/null 2>&1 || { echo "::error::no acceptance evidence for $DIGEST"; exit 1; }
+          uv run python tools/bridge_acceptance.py verify --image-digest "$DIGEST" "$dir"/*.json
+      - name: Verify the owner authorization record
+        env:
+          DIGEST: ${{ github.event.inputs.image_digest }}
+          AUTH_ID: ${{ github.event.inputs.authorization_id }}
+        run: |
+          echo "$AUTH_ID" | grep -Eq '^PA-[0-9]{8}-[a-z0-9][a-z0-9-]{2,62}$' || { echo "::error::bad authorization id"; exit 1; }
+          record="../docs/plan/production-authorizations/$AUTH_ID.md"
+          [ -f "$record" ] || { echo "::error::no authorization record $AUTH_ID"; exit 1; }
+          grep -Fq "$DIGEST" "$record" || { echo "::error::authorization does not name $DIGEST"; exit 1; }
+
+  cutover:
+    needs: bridge-gate
+    runs-on: ubuntu-24.04
+    environment: production
     steps:
       - run: |
-          echo "::error::Production deployment is not authorized."
+          echo "::error::Production cutover steps are not enabled yet: production remains gated until the owner explicitly authorizes the production deployment."
           exit 1

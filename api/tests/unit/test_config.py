@@ -73,6 +73,35 @@ def test_staging_is_refused_without_each_condition(drop: tuple[str, ...], reason
         assert_environment_allowed(Settings.from_env(environ))
 
 
-def test_production_stays_refused_even_when_every_condition_is_met() -> None:
-    with pytest.raises(UnsafeEnvironmentError, match="production"):
-        assert_environment_allowed(Settings.from_env({**_STAGING_READY, "GBA_ENV": "production"}))
+_PRODUCTION_READY = {**_STAGING_READY, "GBA_ENV": "production"}
+
+
+def test_production_is_gated_without_an_explicit_authorization() -> None:
+    # Every bridge condition is met, but the cutover was not authorized.
+    with pytest.raises(UnsafeEnvironmentError, match="production authorization"):
+        assert_environment_allowed(Settings.from_env(_PRODUCTION_READY))
+
+
+def test_authorized_production_runs_only_on_the_bridge_topology() -> None:
+    authorized = {**_PRODUCTION_READY, "GBA_PRODUCTION_AUTHORIZATION": "PA-20261015-cutover"}
+    assert_environment_allowed(Settings.from_env(authorized))
+    for drop, reason in (
+        (("GBA_TRUSTED_PROXY", "GBA_FRONT_DOOR_ID"), "Front Door"),
+        (("GBA_AUTH_ISSUER", "GBA_AUTH_AUDIENCE", "GBA_AUTH_JWKS_URL"), "OIDC"),
+    ):
+        environ = {k: v for k, v in authorized.items() if k not in drop}
+        with pytest.raises(UnsafeEnvironmentError, match=reason):
+            assert_environment_allowed(Settings.from_env(environ))
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {**_STAGING_READY, "GBA_PRODUCTION_AUTHORIZATION": "PA-20261015-cutover"},
+        {**_PRODUCTION_READY, "GBA_PRODUCTION_AUTHORIZATION": "yes"},
+        {**_PRODUCTION_READY, "GBA_PRODUCTION_AUTHORIZATION": "PA-2026-cutover"},
+    ],
+)
+def test_production_authorization_is_strict(environ: dict[str, str]) -> None:
+    with pytest.raises(ValidationError):
+        Settings.from_env(environ)

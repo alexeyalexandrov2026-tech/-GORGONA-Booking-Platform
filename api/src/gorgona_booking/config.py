@@ -1,6 +1,7 @@
 """Process configuration, read explicitly from environment variables."""
 
 import os
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal, Self
@@ -27,12 +28,17 @@ _ENV_FIELDS: Mapping[str, str] = {
     "GBA_AUTH_JWKS_URL": "auth_jwks_url",
     "GBA_AUTH_ALGORITHMS": "auth_algorithms",
     "GBA_AUTH_LEEWAY_SECONDS": "auth_leeway_seconds",
+    # Set only by the gated production promotion, after bridge acceptance passed and the
+    # owner explicitly authorized the cutover (see assert_environment_allowed).
+    "GBA_PRODUCTION_AUTHORIZATION": "production_authorization",
     # Standard Azure Monitor variable; export is off when unset.
     "APPLICATIONINSIGHTS_CONNECTION_STRING": "applicationinsights_connection_string",
 }
 _LIST_FIELDS = frozenset({"auth_algorithms"})
 # Asymmetric only (ADR-0007); mirrors gorgona_booking.auth.verifier.ALLOWED_ALGORITHMS.
 _AUTH_ALGORITHMS = frozenset({"RS256", "RS384", "RS512", "PS256", "ES256", "ES384"})
+# Owner authorization record id, e.g. PA-20261015-ka-nails-cutover (docs/plan).
+_PRODUCTION_AUTHORIZATION = re.compile(r"^PA-[0-9]{8}-[a-z0-9][a-z0-9-]{2,62}$")
 
 
 class Settings(BaseModel):
@@ -55,6 +61,7 @@ class Settings(BaseModel):
     auth_algorithms: tuple[str, ...] = ("RS256", "ES256")
     auth_leeway_seconds: int = Field(default=30, ge=0, le=300)
     applicationinsights_connection_string: SecretStr | None = None
+    production_authorization: str | None = None
 
     @model_validator(mode="after")
     def _pool_bounds(self) -> Self:
@@ -73,6 +80,17 @@ class Settings(BaseModel):
             raise ValueError(
                 "GBA_FRONT_DOOR_ID must be the Front Door profile ID (a UUID)"
             ) from None
+
+    @model_validator(mode="after")
+    def _production_authorization(self) -> Self:
+        value = self.production_authorization
+        if value is None:
+            return self
+        if self.environment != "production":
+            raise ValueError("GBA_PRODUCTION_AUTHORIZATION is only valid with GBA_ENV=production")
+        if not _PRODUCTION_AUTHORIZATION.fullmatch(value):
+            raise ValueError("GBA_PRODUCTION_AUTHORIZATION must look like PA-YYYYMMDD-<slug>")
+        return self
 
     @model_validator(mode="after")
     def _proxy_settings(self) -> Self:
@@ -119,24 +137,29 @@ class UnsafeEnvironmentError(RuntimeError):
 
 
 def assert_environment_allowed(settings: Settings) -> None:
-    """Production is refused until a production milestone is authorized (ADR-0012).
+    """Staging and production start only on the production-bridge topology (ADR-0012).
 
-    Staging may start only behind the trusted Front Door boundary (Private Link origin,
-    X-Azure-FDID check, edge WAF rate limits) with an OIDC provider for staff APIs.
-    The governed framing policy is always active. Required deposits still fail closed.
+    Both require the trusted Front Door boundary (Private Link origin, X-Azure-FDID
+    check, edge WAF and rate limits) and an OIDC provider for staff APIs; the governed
+    framing policy is always active and required deposits fail closed. Production is
+    gated, not disabled: it additionally needs GBA_PRODUCTION_AUTHORIZATION, the owner's
+    authorization record, which only the gated promotion sets after the bridge
+    acceptance gates passed for the exact image being promoted. Without it, no
+    production cutover can start.
     """
-    if settings.environment == "production":
-        raise UnsafeEnvironmentError(
-            "refusing to start in 'production': production deployment is not authorized"
-        )
-    if settings.environment != "staging":
+    if settings.environment not in ("staging", "production"):
         return
     missing = []
     if not settings.auth_configured:
         missing.append("an OIDC provider (GBA_AUTH_ISSUER/AUDIENCE/JWKS_URL)")
     if settings.trusted_proxy != "azure_front_door" or settings.front_door_id is None:
         missing.append("the trusted Front Door boundary (GBA_TRUSTED_PROXY, GBA_FRONT_DOOR_ID)")
+    if settings.environment == "production" and settings.production_authorization is None:
+        missing.append(
+            "an explicit production authorization (GBA_PRODUCTION_AUTHORIZATION, set only by "
+            "the gated promotion after the production-bridge acceptance gates pass)"
+        )
     if missing:
         raise UnsafeEnvironmentError(
-            "refusing to start in 'staging' without " + " and ".join(missing)
+            f"refusing to start in '{settings.environment}' without " + " and ".join(missing)
         )

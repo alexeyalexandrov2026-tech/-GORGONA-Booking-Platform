@@ -37,13 +37,24 @@ class FramingPolicyMiddleware:
                 headers = MutableHeaders(scope=message)
                 if is_api:
                     headers["content-security-policy"] = "frame-ancestors 'none'"
-                elif headers.get("content-type", "").startswith("text/html"):
-                    origins = await self._origins(scope)
-                    headers["content-security-policy"] = " ".join(
-                        ["frame-ancestors 'self'", *origins]
+                    headers["cache-control"] = (
+                        "no-store"
+                        if scope["path"].startswith("/v1/customer/")
+                        else "private, no-store"
                     )
-                    if not origins:
-                        headers["x-frame-options"] = "SAMEORIGIN"
+                elif headers.get("content-type", "").startswith("text/html"):
+                    if scope["path"] in ("/book", "/book/"):
+                        origins = await self._origins(scope)
+                        headers["content-security-policy"] = " ".join(
+                            ["frame-ancestors 'self'", *origins]
+                        )
+                        if not origins:
+                            headers["x-frame-options"] = "SAMEORIGIN"
+                    else:
+                        # A customer's embedding approval never grants framing of staff UI.
+                        headers["content-security-policy"] = "frame-ancestors 'none'"
+                        headers["x-frame-options"] = "DENY"
+                        headers["cache-control"] = "private, no-store"
             await send(message)
 
         await self.app(scope, receive, send_with_policy)

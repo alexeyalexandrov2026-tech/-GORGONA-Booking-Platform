@@ -23,7 +23,7 @@
   - Staging is production-parity but **ephemeral**: created for an acceptance window, then deleted as one stack.
   - Production is created only after staging evidence and explicit owner authorization.
   - Resource groups are per environment; the IaC also works with separate subscriptions later.
-- **Start guard.** `GBA_ENV=staging` is allowed only when OIDC, trusted-proxy mode and the framing policy are configured. `GBA_ENV=production` stays refused in code until a production milestone is authorized.
+- **Start guard.** `GBA_ENV=staging` and `GBA_ENV=production` start only on the bridge topology: OIDC, the trusted Front Door boundary and the framing policy configured. Production additionally needs `GBA_PRODUCTION_AUTHORIZATION`, the owner's authorization record, which only the gated promotion sets. Production remains gated behind the approved production-bridge acceptance process. No final production cutover occurs until the required bridge/security/E2E gates pass and the production deployment is explicitly authorized.
 
 ## Consequences
 

@@ -15,7 +15,7 @@ Date: 2026-09-30 (America/New_York). Scope: checkpoints A and B of [`M4_PLAN.md`
 | **M4 AZURE FOUNDATION GATE** | **FAIL (pending Azure evidence)** | Checkpoint B is complete locally. The gate needs checkpoint C: read-only discovery (blocked on sign-in), approved resource creation and a staging window |
 | **AZURE STAGING ACCEPTANCE** | **NOT DEPLOYED** | No staging window has been approved |
 | **PRODUCTION IFRAME RELEASE GATE** | **BLOCKED** | The M3 clickjacking finding is **fixed in code**: a governed per-tenant `frame-ancestors` allowlist, with the unapproved origin blocked and the approved origin allowed in real Chromium. The gate still needs staging evidence through Front Door, and an owner-approved KA production origin (none is approved) |
-| **PRODUCTION DEPLOYMENT** | **NOT AUTHORIZED** | Refused in code at process start and by the `promote-production` workflow |
+| **PRODUCTION DEPLOYMENT** | **GATED** | Production remains gated behind the approved production-bridge acceptance process. No final production cutover occurs until the required bridge/security/E2E gates pass and the production deployment is explicitly authorized. Enforced at process start (bridge topology plus `GBA_PRODUCTION_AUTHORIZATION`) and by `promote-production` (bridge evidence verified per digest, then owner authorization, then the production environment approval) |
 | **KA NAILS GO-LIVE** | **NOT AUTHORIZED** | KA remains `not_live`; business facts are unconfirmed |
 
 ## Owner decisions recorded
@@ -23,7 +23,7 @@ Date: 2026-09-30 (America/New_York). Scope: checkpoints A and B of [`M4_PLAN.md`
 - **Region:** East US 2.
 - **Staging:** time-boxed production-parity, ephemeral and IaC-controlled, with budgets.
 - **AI plane:** a persistent 24/7 AI learning plane, independent of staging (ADR-0013).
-- **Start guard:** staging is allowed only when conditions are met; production stays refused in code.
+- **Start guard:** staging and production start only on the bridge topology. Production remains gated behind the approved production-bridge acceptance process. No final production cutover occurs until the required bridge/security/E2E gates pass and the production deployment is explicitly authorized.
 - **Tooling:** Azure CLI, Bicep and Docker may be installed.
 - **Actions:** every Azure action needs separate explicit approval.
 

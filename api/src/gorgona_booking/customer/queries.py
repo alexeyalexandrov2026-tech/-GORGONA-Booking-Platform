@@ -196,10 +196,20 @@ async def location_zone(conn: RuntimeConnection, location_id: UUID) -> str:
     return str(row[0])
 
 
-async def availability(conn: RuntimeConnection, query: AvailabilityQuery) -> AvailabilityView:
-    await live_name(conn)
+async def availability(
+    conn: RuntimeConnection,
+    query: AvailabilityQuery,
+    *,
+    preserved_quote: Quote | None = None,
+    exclude_booking_id: UUID | None = None,
+    require_live: bool = True,
+) -> AvailabilityView:
+    # Internal management callers have already authorized an active membership.
+    # They may inspect setup before go-live, but cannot override scheduling rules.
+    if require_live:
+        await live_name(conn)
     rules, _ = await policies(conn)
-    quote = await quote_selection(conn, query)
+    quote = preserved_quote or await quote_selection(conn, query)
     zone = await location_zone(conn, query.location_id)
     now = datetime.now(UTC)
     today = now.astimezone(ZoneInfo(zone)).date()
@@ -234,11 +244,14 @@ async def availability(conn: RuntimeConnection, query: AvailabilityQuery) -> Ava
                     "join gba.bookings b on b.tenant_id = a.tenant_id and b.id = a.booking_id "
                     "where a.resource_id = %s and (b.status = 'CONFIRMED' "
                     "or (b.status = 'HOLD' and b.hold_expires_at > clock_timestamp())) "
+                    "and (%s::uuid is null or b.id <> %s) "
                     "and a.during && tstzrange(%s, %s, '[)') "
                     "union all select starts_at, ends_at from gba.resource_blocks "
                     "where resource_id = %s and starts_at < %s and ends_at > %s",
                     (
                         artist.id,
+                        exclude_booking_id,
+                        exclude_booking_id,
                         windows[0][0],
                         windows[-1][1],
                         artist.id,

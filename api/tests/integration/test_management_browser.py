@@ -127,10 +127,18 @@ def _provider(
             or not hmac.compare_digest(record.challenge, challenge)
         ):
             raise HTTPException(400, "Invalid code or PKCE verifier")
-        claims = {"iss": issuer, "email": user.email, "name": "FAKE Management Browser Manager"}
-        access_token = idp.token(user.subject, **claims)
+        access_token = idp.token(
+            user.subject,
+            email=user.email,
+            iss=issuer,
+            name="FAKE Management Browser Manager",
+        )
         id_token = idp.token(
-            user.subject, **claims, aud=CLIENT_ID,
+            user.subject,
+            email=user.email,
+            iss=issuer,
+            name="FAKE Management Browser Manager",
+            aud=CLIENT_ID,
             nonce="invalid-nonce" if record.invalid_nonce else record.nonce,
         )
         return JSONResponse(
@@ -190,9 +198,10 @@ def test_real_management_browser_oidc_pkce_and_database(
     from fastapi.staticfiles import StaticFiles
 
     app.mount("/", StaticFiles(directory=web / "out", html=True), name="management-test-web")
+    blocked_keys = ("DSN", "DATABASE_URL", "SECRET", "PASSWORD", "TOKEN")
     env = {
         k: v for k, v in os.environ.items()
-        if not any(part in k.upper() for part in ("DSN", "DATABASE_URL", "SECRET", "PASSWORD", "TOKEN"))
+        if not any(part in k.upper() for part in blocked_keys)
     }
     env.update(
         GBA_MGMT_BROWSER_URL=app_origin,
@@ -212,7 +221,10 @@ def test_real_management_browser_oidc_pkce_and_database(
             "on c.tenant_id = b.tenant_id and c.booking_id = b.id "
             "where c.customer_name = %s group by b.status", (GUEST,),
         ).fetchall()
-    assert dict(rows) == {"CANCELLED": 2}, "create -> reschedule -> cancel must persist in PostgreSQL"
+    assert dict(rows) == {"CANCELLED": 2}, (
+        "create -> reschedule -> cancel must persist in PostgreSQL"
+    )
     with owner_tenant_transaction(owner_conn, world.b.tenant_id):
         count = owner_conn.execute("select count(*) from gba.bookings").fetchone()
-    assert count is not None and count[0] == 0
+    assert count is not None
+    assert count[0] == 0

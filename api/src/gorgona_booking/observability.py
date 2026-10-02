@@ -17,15 +17,20 @@
 import json
 import logging
 import os
+import re
 import sys
 import time
 import traceback
-from collections.abc import Mapping
+import urllib.parse
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
 from opentelemetry import metrics, trace
+from opentelemetry.sdk.trace import Event, ReadableSpan, SpanProcessor
+from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
+from opentelemetry.trace import Link
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from gorgona_booking.config import Settings
@@ -143,12 +148,6 @@ def exporter_credential(environ: Mapping[str, str]) -> TokenCredential | None:
     return ManagedIdentityCredential(client_id=client_id)
 
 
-import re
-import urllib.parse
-from collections.abc import Sequence
-from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor
-from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
-
 _EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
 _PHONE_PATTERN = re.compile(r"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}")
 _SENSITIVE_KEY_SUBSTRINGS = frozenset(
@@ -163,8 +162,12 @@ _SENSITIVE_KEY_SUBSTRINGS = frozenset(
         "credential",
         "bearer",
         "booking-token",
+        "booking_token",
+        "booking_id",
+        "booking-id",
         "email",
         "phone",
+        "query",
     }
 )
 _SENSITIVE_VALUE_SUBSTRINGS = (
@@ -173,11 +176,16 @@ _SENSITIVE_VALUE_SUBSTRINGS = (
     "fake-authorization-code",
     "private-booking-id",
     "fake-sensitive-",
+    "secret",
+    "token",
+    "bearer",
+    "booking-token",
+    "capability",
 )
 
 
 def sanitize_attributes(raw_attrs: Mapping[str, Any], kind: trace.SpanKind) -> dict[str, Any]:
-    """Sanitizes span attributes using only public types and deterministic rules."""
+    """Sanitizes span, event, or link attributes using only public types and deterministic rules."""
     sanitized: dict[str, Any] = {}
 
     # Extract correlation ID if available
@@ -228,7 +236,8 @@ def sanitize_attributes(raw_attrs: Mapping[str, Any], kind: trace.SpanKind) -> d
 
         # Value inspection and sanitization
         if isinstance(v, str):
-            if any(pv in v for pv in _SENSITIVE_VALUE_SUBSTRINGS):
+            vl = v.lower()
+            if any(pv in vl for pv in _SENSITIVE_VALUE_SUBSTRINGS):
                 continue
             if _EMAIL_PATTERN.search(v) or _PHONE_PATTERN.search(v):
                 continue
@@ -243,8 +252,9 @@ def sanitize_attributes(raw_attrs: Mapping[str, Any], kind: trace.SpanKind) -> d
             drop = False
             for item in v:
                 if isinstance(item, str):
+                    il = item.lower()
                     if (
-                        any(pv in item for pv in _SENSITIVE_VALUE_SUBSTRINGS)
+                        any(pv in il for pv in _SENSITIVE_VALUE_SUBSTRINGS)
                         or _EMAIL_PATTERN.search(item)
                         or _PHONE_PATTERN.search(item)
                     ):
@@ -262,12 +272,43 @@ def sanitize_attributes(raw_attrs: Mapping[str, Any], kind: trace.SpanKind) -> d
     return sanitized
 
 
+def sanitize_events(events: Sequence[Event]) -> list[Event]:
+    """Sanitizes OpenTelemetry span events and purges customer data from exceptions."""
+    sanitized: list[Event] = []
+    for e in events:
+        if e.name == "exception":
+            # Preserve only safe diagnostic fields; drop exception.message and exception.stacktrace
+            clean_attrs: dict[str, Any] = {}
+            if e.attributes:
+                exc_type = e.attributes.get("exception.type")
+                if exc_type is not None:
+                    clean_attrs["exception.type"] = str(exc_type)
+                escaped = e.attributes.get("exception.escaped")
+                if escaped is not None and isinstance(escaped, bool):
+                    clean_attrs["exception.escaped"] = escaped
+            sanitized.append(Event(name="exception", attributes=clean_attrs, timestamp=e.timestamp))
+        else:
+            clean_attrs = sanitize_attributes(dict(e.attributes or {}), trace.SpanKind.INTERNAL)
+            sanitized.append(Event(name=e.name, attributes=clean_attrs, timestamp=e.timestamp))
+    return sanitized
+
+
+def sanitize_links(links: Sequence[Link]) -> list[Link]:
+    """Sanitizes OpenTelemetry span links and their attributes."""
+    sanitized: list[Link] = []
+    for link in links:
+        clean_attrs = sanitize_attributes(dict(link.attributes or {}), trace.SpanKind.INTERNAL)
+        sanitized.append(Link(context=link.context, attributes=clean_attrs))
+    return sanitized
+
+
 class PrivacySpanExporter(SpanExporter):
-    """Wraps an OpenTelemetry SpanExporter to sanitize span attributes before export.
+    """Wraps an OpenTelemetry SpanExporter to sanitize span data before export.
 
     Guarantees that no booking IDs, emails, phone numbers, query secrets,
     authorization tokens, or booking tokens enter exported telemetry.
-    Uses only public OpenTelemetry SDK APIs (`ReadableSpan`).
+    Sanitizes span attributes, span events (including exceptions), and span links
+    using only public OpenTelemetry SDK APIs (`ReadableSpan`, `Event`, `Link`).
     """
 
     def __init__(self, exporter: SpanExporter) -> None:
@@ -280,14 +321,16 @@ class PrivacySpanExporter(SpanExporter):
     def _sanitize_span(self, span: ReadableSpan) -> ReadableSpan:
         attrs = dict(span.attributes or {})
         sanitized_attrs = sanitize_attributes(attrs, span.kind)
+        sanitized_events = sanitize_events(span.events)
+        sanitized_links = sanitize_links(span.links)
         return ReadableSpan(
             name=span.name,
             context=span.context,
             parent=span.parent,
             resource=span.resource,
             attributes=sanitized_attrs,
-            events=span.events,
-            links=span.links,
+            events=sanitized_events,
+            links=sanitized_links,
             kind=span.kind,
             status=span.status,
             start_time=span.start_time,

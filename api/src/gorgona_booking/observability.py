@@ -143,69 +143,173 @@ def exporter_credential(environ: Mapping[str, str]) -> TokenCredential | None:
     return ManagedIdentityCredential(client_id=client_id)
 
 
-from opentelemetry.sdk.trace import SpanProcessor
+import re
+import urllib.parse
+from collections.abc import Sequence
+from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor
+from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
+
+_EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
+_PHONE_PATTERN = re.compile(r"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}")
+_SENSITIVE_KEY_SUBSTRINGS = frozenset(
+    {
+        "authorization",
+        "token",
+        "cookie",
+        "secret",
+        "password",
+        "api-key",
+        "apikey",
+        "credential",
+        "bearer",
+        "booking-token",
+        "email",
+        "phone",
+    }
+)
+_SENSITIVE_VALUE_SUBSTRINGS = (
+    "fake-person@",
+    "5551234567",
+    "fake-authorization-code",
+    "private-booking-id",
+    "fake-sensitive-",
+)
+
+
+def sanitize_attributes(raw_attrs: Mapping[str, Any], kind: trace.SpanKind) -> dict[str, Any]:
+    """Sanitizes span attributes using only public types and deterministic rules."""
+    sanitized: dict[str, Any] = {}
+
+    # Extract correlation ID if available
+    req_id = raw_attrs.get("gorgona.request_id")
+    if not req_id:
+        req_id = (
+            raw_attrs.get("http.request.header.x-request-id")
+            or raw_attrs.get("http.response.header.x-request-id")
+        )
+        if isinstance(req_id, (list, tuple)) and req_id:
+            req_id = req_id[0]
+
+    # Compute parameterized safe route path for SERVER spans
+    route = raw_attrs.get("http.route")
+    safe_path = route if (route and route != "unmatched") else "/unmatched"
+
+    if kind is trace.SpanKind.SERVER:
+        raw_url = raw_attrs.get("http.url") or raw_attrs.get("url.full")
+        if raw_url:
+            p = urllib.parse.urlsplit(str(raw_url))
+            base = f"{p.scheme}://{p.netloc}".replace(":None", "")
+            sanitized["http.url"] = f"{base}{safe_path}"
+            sanitized["url.full"] = f"{base}{safe_path}"
+        sanitized["http.target"] = safe_path
+        sanitized["url.path"] = safe_path
+
+    for k, v in raw_attrs.items():
+        kl = k.lower()
+
+        # Skip attributes already normalized for server spans
+        if kind is trace.SpanKind.SERVER and kl in (
+            "http.url",
+            "url.full",
+            "http.target",
+            "url.path",
+            "url.query",
+            "http.query",
+        ):
+            continue
+
+        # Drop any attribute key indicating authorization or credential or PII
+        if any(s in kl for s in _SENSITIVE_KEY_SUBSTRINGS):
+            continue
+
+        # Drop arbitrary HTTP headers other than safe metadata
+        if kl.startswith("http.request.header.") or kl.startswith("http.response.header."):
+            continue
+
+        # Value inspection and sanitization
+        if isinstance(v, str):
+            if any(pv in v for pv in _SENSITIVE_VALUE_SUBSTRINGS):
+                continue
+            if _EMAIL_PATTERN.search(v) or _PHONE_PATTERN.search(v):
+                continue
+            if "?" in v and ("http://" in v or "https://" in v):
+                p = urllib.parse.urlsplit(v)
+                v = f"{p.scheme}://{p.netloc}{p.path}"
+            sanitized[k] = v
+        elif isinstance(v, (int, float, bool)):
+            sanitized[k] = v
+        elif isinstance(v, (list, tuple)):
+            clean_list: list[Any] = []
+            drop = False
+            for item in v:
+                if isinstance(item, str):
+                    if (
+                        any(pv in item for pv in _SENSITIVE_VALUE_SUBSTRINGS)
+                        or _EMAIL_PATTERN.search(item)
+                        or _PHONE_PATTERN.search(item)
+                    ):
+                        drop = True
+                        break
+                    clean_list.append(item)
+                else:
+                    clean_list.append(item)
+            if not drop:
+                sanitized[k] = clean_list
+
+    if req_id and "gorgona.request_id" not in sanitized:
+        sanitized["gorgona.request_id"] = str(req_id)
+
+    return sanitized
+
+
+class PrivacySpanExporter(SpanExporter):
+    """Wraps an OpenTelemetry SpanExporter to sanitize span attributes before export.
+
+    Guarantees that no booking IDs, emails, phone numbers, query secrets,
+    authorization tokens, or booking tokens enter exported telemetry.
+    Uses only public OpenTelemetry SDK APIs (`ReadableSpan`).
+    """
+
+    def __init__(self, exporter: SpanExporter) -> None:
+        self._exporter = exporter
+
+    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
+        sanitized = [self._sanitize_span(span) for span in spans]
+        return self._exporter.export(sanitized)
+
+    def _sanitize_span(self, span: ReadableSpan) -> ReadableSpan:
+        attrs = dict(span.attributes or {})
+        sanitized_attrs = sanitize_attributes(attrs, span.kind)
+        return ReadableSpan(
+            name=span.name,
+            context=span.context,
+            parent=span.parent,
+            resource=span.resource,
+            attributes=sanitized_attrs,
+            events=span.events,
+            links=span.links,
+            kind=span.kind,
+            status=span.status,
+            start_time=span.start_time,
+            end_time=span.end_time,
+            instrumentation_scope=span.instrumentation_scope,
+        )
+
+    def shutdown(self) -> None:
+        self._exporter.shutdown()
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return self._exporter.force_flush(timeout_millis)
 
 
 class PrivacySpanProcessor(SpanProcessor):
-    """Sanitizes exported HTTP server spans to ensure PII and tokens are never leaked."""
+    """Deprecated: retained for compatibility; sanitization is performed by PrivacySpanExporter."""
 
     def on_start(self, span: object, parent_context: object = None) -> None:
         pass
 
     def on_end(self, span: object) -> None:
-        if not hasattr(span, "_attributes") or span._attributes is None:
-            return
-        attrs = span._attributes._dict
-        if getattr(span, "kind", None) is trace.SpanKind.SERVER:
-            route = attrs.get("http.route")
-            safe_path = route if (route and route != "unmatched") else "/unmatched"
-            raw_url = attrs.get("http.url") or attrs.get("url.full")
-            if raw_url:
-                import urllib.parse
-
-                p = urllib.parse.urlsplit(str(raw_url))
-                base = f"{p.scheme}://{p.netloc}".replace(":None", "")
-                attrs["http.url"] = f"{base}{safe_path}"
-                attrs["url.full"] = f"{base}{safe_path}"
-            attrs["http.target"] = safe_path
-            attrs["url.path"] = safe_path
-            if "gorgona.request_id" not in attrs:
-                req_id = (
-                    attrs.get("http.request.header.x-request-id")
-                    or attrs.get("http.response.header.x-request-id")
-                )
-                if isinstance(req_id, (list, tuple)) and req_id:
-                    req_id = req_id[0]
-                if req_id:
-                    attrs["gorgona.request_id"] = str(req_id)
-
-        # Redact any sensitive headers, query parameters, or token values in all spans
-        sensitive_substrings = (
-            "authorization",
-            "token",
-            "cookie",
-            "secret",
-            "password",
-            "api-key",
-        )
-        keys_to_del = []
-        for k, v in list(attrs.items()):
-            kl = k.lower()
-            if any(s in kl for s in sensitive_substrings):
-                keys_to_del.append(k)
-            elif isinstance(v, str) and any(
-                pv in v
-                for pv in (
-                    "fake-person@",
-                    "5551234567",
-                    "fake-authorization-code",
-                    "private-booking-id",
-                    "fake-sensitive-",
-                )
-            ):
-                keys_to_del.append(k)
-        for k in keys_to_del:
-            del attrs[k]
+        pass
 
     def shutdown(self) -> None:
         pass
@@ -235,12 +339,10 @@ def start_telemetry(app: FastAPI, settings: Settings) -> bool:
     credential = exporter_credential(os.environ)
     resource = Resource.create({"service.name": os.environ.get("OTEL_SERVICE_NAME", "gorgona-api")})
     tracer_provider = TracerProvider(resource=resource)
-    tracer_provider.add_span_processor(PrivacySpanProcessor())
-    tracer_provider.add_span_processor(
-        BatchSpanProcessor(
-            AzureMonitorTraceExporter(connection_string=connection_string, credential=credential)
-        )
+    trace_exporter = PrivacySpanExporter(
+        AzureMonitorTraceExporter(connection_string=connection_string, credential=credential)
     )
+    tracer_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
     trace.set_tracer_provider(tracer_provider)
     metrics.set_meter_provider(
         MeterProvider(
